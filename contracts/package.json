@@ -1,0 +1,36 @@
+{
+  "name": "nft-trading-game-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for NFT Trading Game",
+  "type": "module",
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "deploy:nft": "hardhat ignition deploy ignition/modules/GameNFT.ts --network localhost",
+    "deploy:marketplace": "hardhat ignition deploy ignition/modules/Marketplace.ts --network localhost",
+    "deploy:combined": "hardhat ignition deploy ignition/modules/DeployAll.ts --network localhost && npm run update-env",
+    "deploy": "npm run deploy:combined",
+    "deploy-all": "tsx scripts/deploy-all.ts --network localhost",
+    "update-env": "tsx scripts/update-env.ts",
+    "fresh": "node scripts/fresh-start.js",
+    "node": "hardhat node",
+    "clean": "hardhat clean",
+    "typecheck": "tsc --noEmit"
+  },
+  "keywords": ["solidity", "ethereum", "nft", "erc721", "marketplace"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "hardhat": "^3.0.7",
+    "ethers": "^6.15.0",
+    "@openzeppelin/contracts": "^5.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0",
+    "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
+    "@nomicfoundation/hardhat-network-helpers": "^3.0.1",
+    "@types/node": "^22.10.2",
+    "@types/mocha": "^10.0.10",
+    "tsx": "^4.19.2"
+  }
+}
