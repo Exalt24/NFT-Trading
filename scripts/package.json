@@ -1,0 +1,24 @@
+{
+  "name": "nft-trading-game-scripts",
+  "version": "1.0.0",
+  "description": "Utility scripts for NFT Trading Game",
+  "type": "module",
+  "scripts": {
+    "health": "tsx health-check.ts",
+    "verify": "tsx verify-deployment.ts",
+    "test-all": "tsx test-all-services.ts",
+    "verify-stack": "tsx verify-stack.ts",
+    "docker-deploy": "tsx docker-deploy-contracts.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "@types/pg": "^8.15.5",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "ethers": "^6.15.0",
+    "pg": "^8.16.3"
+  }
+}

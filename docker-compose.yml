@@ -1,0 +1,123 @@
+services:
+  postgres:
+    image: postgres:18-alpine
+    container_name: nft-marketplace-postgres
+    environment:
+      POSTGRES_DB: nft_marketplace
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"  # Changed from 5432 to avoid conflict
+    volumes:
+      - nft_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - nft-network
+    restart: unless-stopped
+
+  hardhat:
+    build:
+      context: ./contracts
+      dockerfile: ../docker/contracts.Dockerfile
+    container_name: nft-marketplace-hardhat
+    ports:
+      - "8546:8545"  # Changed from 8545 to avoid conflict
+    command: sh -c "npx hardhat compile && npx hardhat node --hostname 0.0.0.0 --chain-id 31338"
+    networks:
+      - nft-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8545 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: ../docker/backend.Dockerfile
+    container_name: nft-marketplace-backend
+    environment:
+      - PORT=4000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_NAME=nft_marketplace
+      - DB_USER=postgres
+      - DB_PASSWORD=postgres
+      - RPC_URL=http://hardhat:8545
+      - NFT_CONTRACT_ADDRESS=${NFT_CONTRACT_ADDRESS:-}
+      - MARKETPLACE_CONTRACT_ADDRESS=${MARKETPLACE_CONTRACT_ADDRESS:-}
+      - CHAIN_ID=31338
+      - START_BLOCK=0
+      - PINATA_JWT=${PINATA_JWT:-}
+      - PINATA_GATEWAY=${PINATA_GATEWAY:-}
+      - CORS_ORIGIN=*  # Allow all origins (or specify: http://localhost:3002,http://localhost:3003)
+    ports:
+      - "4001:4000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      hardhat:
+        condition: service_healthy
+    networks:
+      - nft-network
+    volumes:
+      - ./backend/abis:/app/abis:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4000/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  marketplace:
+    build:
+      context: ./marketplace-frontend
+      dockerfile: ../docker/marketplace.Dockerfile
+    container_name: nft-marketplace-frontend
+    ports:
+      - "3002:3000"
+    environment:
+      - VITE_API_URL=http://localhost:4001/api  # REST API
+      - VITE_WEBSOCKET_URL=http://localhost:4001       # WebSocket (NEW!)
+      - VITE_NFT_CONTRACT_ADDRESS=${NFT_CONTRACT_ADDRESS:-}
+      - VITE_MARKETPLACE_CONTRACT_ADDRESS=${MARKETPLACE_CONTRACT_ADDRESS:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - nft-network
+    restart: unless-stopped
+
+  creator-dashboard:
+    build:
+      context: ./creator-dashboard
+      dockerfile: ../docker/creator.Dockerfile
+    container_name: nft-marketplace-creator
+    ports:
+      - "3003:3001"
+    environment:
+      - VITE_API_URL=http://localhost:4001/api  # REST API
+      - VITE_WEBSOCKET_URL=http://localhost:4001   # WebSocket (NEW!)
+      - VITE_NFT_CONTRACT_ADDRESS=${NFT_CONTRACT_ADDRESS:-}
+      - VITE_MARKETPLACE_CONTRACT_ADDRESS=${MARKETPLACE_CONTRACT_ADDRESS:-}
+      - VITE_PINATA_JWT=${PINATA_JWT:-}
+      - VITE_PINATA_GATEWAY=${PINATA_GATEWAY:-}
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - nft-network
+    restart: unless-stopped
+
+volumes:
+  nft_postgres_data:  # Renamed to avoid conflict
+    driver: local
+
+networks:
+  nft-network:
+    driver: bridge
