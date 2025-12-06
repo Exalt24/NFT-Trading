@@ -1,6 +1,6 @@
 # NFT Trading Platform
 
-A complete, production-ready full-stack NFT marketplace and creator platform built with modern web3 technologies. Features ERC-721 NFT minting, IPFS metadata storage, real-time marketplace trading, creator tools, and comprehensive analytics.
+A complete, production-ready full-stack NFT marketplace and creator platform built with web3 technologies. Features ERC-721 NFT minting, IPFS metadata storage, real-time marketplace trading, creator tools, and comprehensive analytics.
 
 ## ✨ Features
 
