@@ -37,3 +37,6 @@ logs/
 
 # Vite
 .vite/
+
+# Screenshots
+Screenshots/

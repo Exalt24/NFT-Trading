@@ -247,6 +247,59 @@ export class MarketplaceService {
     }
   }
 
+  async getActivityHistory(limit: number = 50): Promise<any[]> {
+    try {
+      const result = await pool.query(
+        `SELECT * FROM (
+          -- Minted events
+          SELECT
+            'nftMinted' as event_type,
+            token_id,
+            EXTRACT(EPOCH FROM COALESCE(minted_at, created_at)) * 1000 as timestamp,
+            0 as block_number,
+            json_build_object('owner', owner, 'tokenURI', token_uri) as data
+          FROM nfts
+
+          UNION ALL
+
+          -- Listed events
+          SELECT
+            'nftListed' as event_type,
+            token_id,
+            EXTRACT(EPOCH FROM COALESCE(listed_at, created_at)) * 1000 as timestamp,
+            0 as block_number,
+            json_build_object('seller', seller, 'price', price) as data
+          FROM marketplace_listings
+
+          UNION ALL
+
+          -- Sold events
+          SELECT
+            'nftSold' as event_type,
+            token_id,
+            EXTRACT(EPOCH FROM COALESCE(sold_at, created_at)) * 1000 as timestamp,
+            0 as block_number,
+            json_build_object('seller', seller, 'buyer', buyer, 'price', price, 'platformFee', platform_fee, 'royaltyFee', royalty_fee) as data
+          FROM trading_history
+        ) combined
+        ORDER BY timestamp DESC
+        LIMIT $1`,
+        [limit]
+      );
+
+      return result.rows.map(row => ({
+        type: row.event_type,
+        tokenId: row.token_id,
+        timestamp: Math.floor(Number(row.timestamp)),
+        blockNumber: row.block_number,
+        data: row.data,
+      }));
+    } catch (error) {
+      console.error('❌ Failed to get activity history:', error);
+      throw new Error('Failed to retrieve activity history');
+    }
+  }
+
   async getListingsByPriceRange(
     minPrice: string,
     maxPrice: string

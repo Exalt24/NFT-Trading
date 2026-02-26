@@ -17,7 +17,7 @@ export const config = {
   wsUrl: 'http://localhost:4000',
   nftAddress: process.env.NFT_CONTRACT_ADDRESS || '',
   marketplaceAddress: process.env.MARKETPLACE_CONTRACT_ADDRESS || '',
-  chainId: parseInt(process.env.CHAIN_ID || '31338'),
+  chainId: parseInt(process.env.CHAIN_ID || '31337'),
 };
 
 // Provider

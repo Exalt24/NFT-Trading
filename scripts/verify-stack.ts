@@ -53,7 +53,7 @@ async function checkHTTPEndpoint(url: string, name: string): Promise<ServiceStat
 
 async function checkContractAddresses(): Promise<ServiceStatus> {
   try {
-    const { stdout } = await execAsync('docker exec nft-hardhat cat /app/ignition/deployments/chain-31338/deployed_addresses.json');
+    const { stdout } = await execAsync('docker exec nft-hardhat cat /app/ignition/deployments/chain-31337/deployed_addresses.json');
     const addresses = JSON.parse(stdout);
     
     const nftAddress = addresses['DeployAllModule#GameNFT'] || addresses['GameNFTModule#GameNFT'];

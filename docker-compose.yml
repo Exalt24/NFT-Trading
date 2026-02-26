@@ -26,7 +26,7 @@ services:
     container_name: nft-marketplace-hardhat
     ports:
       - "8546:8545"  # Changed from 8545 to avoid conflict
-    command: sh -c "npx hardhat compile && npx hardhat node --hostname 0.0.0.0 --chain-id 31338"
+    command: sh -c "npx hardhat compile && npx hardhat node --hostname 0.0.0.0 --chain-id 31337"
     networks:
       - nft-network
     restart: unless-stopped
@@ -51,7 +51,7 @@ services:
       - RPC_URL=http://hardhat:8545
       - NFT_CONTRACT_ADDRESS=${NFT_CONTRACT_ADDRESS:-}
       - MARKETPLACE_CONTRACT_ADDRESS=${MARKETPLACE_CONTRACT_ADDRESS:-}
-      - CHAIN_ID=31338
+      - CHAIN_ID=31337
       - START_BLOCK=0
       - PINATA_JWT=${PINATA_JWT:-}
       - PINATA_GATEWAY=${PINATA_GATEWAY:-}

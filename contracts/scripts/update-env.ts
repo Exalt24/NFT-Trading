@@ -48,7 +48,7 @@ function updateEnvFile(
 async function main() {
   console.log('📝 Reading Ignition deployment artifacts...\n');
   
-  const deploymentPath = join(__dirname, '../ignition/deployments/chain-31338/deployed_addresses.json');
+  const deploymentPath = join(__dirname, '../ignition/deployments/chain-31337/deployed_addresses.json');
   
   if (!existsSync(deploymentPath)) {
     console.error('❌ Deployment artifacts not found!');

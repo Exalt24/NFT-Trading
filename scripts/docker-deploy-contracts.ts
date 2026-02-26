@@ -80,7 +80,7 @@ async function getDeployedAddresses(): Promise<DeploymentAddresses> {
 
   try {
     const { stdout } = await execAsync(
-      'docker exec nft-marketplace-hardhat cat /app/ignition/deployments/chain-31338/deployed_addresses.json'
+      'docker exec nft-marketplace-hardhat cat /app/ignition/deployments/chain-31337/deployed_addresses.json'
     );
 
     const deployedAddresses = JSON.parse(stdout);

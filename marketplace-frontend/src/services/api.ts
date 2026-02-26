@@ -115,6 +115,10 @@ class APIService {
     return this.fetch<Listing[]>(`/marketplace/price-range?min=${min}&max=${max}`);
   }
 
+  async getActivityHistory(limit: number = 50): Promise<any[]> {
+    return this.fetch<any[]>(`/marketplace/activity?limit=${limit}`);
+  }
+
   async getPlatformStats(): Promise<PlatformStats> {
     return this.fetch<PlatformStats>('/analytics/stats');
   }

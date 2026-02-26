@@ -17,7 +17,7 @@ export const IPFS_GATEWAYS = [
 ] as const;
 
 export const CHAIN_CONFIG = {
-  CHAIN_ID: 31338,
+  CHAIN_ID: 31337,
   CHAIN_NAME: 'Hardhat Local',
   RPC_URL: 'http://127.0.0.1:8545'
 } as const;

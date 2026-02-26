@@ -1,5 +1,6 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { formatAddress, formatTimestamp, formatEther } from '../utils/formatters';
+import { api } from '../services/api';
 import type { WebSocketEvent } from '../types';
 
 const EVENT_LABELS: Record<WebSocketEvent['type'], string> = {
@@ -71,19 +72,66 @@ export function ActivityFeed({
     ])
   );
 
+  const [historicalEvents, setHistoricalEvents] = useState<WebSocketEvent[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const hasFetched = useRef(false);
+
   useEffect(() => {
-    console.log('ActivityFeed - Total events:', events.length);
+    if (hasFetched.current) return;
+    hasFetched.current = true;
+
+    api.getActivityHistory(100)
+      .then((history) => {
+        setHistoricalEvents(history as WebSocketEvent[]);
+      })
+      .catch((err) => {
+        console.error('Failed to load activity history:', err);
+      })
+      .finally(() => {
+        setLoadingHistory(false);
+      });
+  }, []);
+
+  const allEvents = useMemo(() => {
+    if (events.length === 0) return historicalEvents;
+    if (historicalEvents.length === 0) return events;
+
+    // Merge: real-time events first, then historical, deduplicated by type+tokenId+timestamp
+    const seen = new Set<string>();
+    const merged: WebSocketEvent[] = [];
+
+    for (const event of events) {
+      const key = `${event.type}-${event.tokenId}-${event.timestamp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(event);
+      }
+    }
+
+    for (const event of historicalEvents) {
+      const key = `${event.type}-${event.tokenId}-${event.timestamp}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        merged.push(event);
+      }
+    }
+
+    return merged.sort((a, b) => b.timestamp - a.timestamp);
+  }, [events, historicalEvents]);
+
+  useEffect(() => {
+    console.log('ActivityFeed - Total events:', allEvents.length);
     console.log('ActivityFeed - Selected types:', Array.from(selectedTypes));
-  }, [events, selectedTypes]);
+  }, [allEvents, selectedTypes]);
 
   const filteredEvents = useMemo(() => {
-    const filtered = events
+    const filtered = allEvents
       .filter(event => selectedTypes.has(event.type))
       .slice(0, limit);
-    
+
     console.log('ActivityFeed - Filtered events:', filtered.length);
     return filtered;
-  }, [events, selectedTypes, limit]);
+  }, [allEvents, selectedTypes, limit]);
 
   const toggleEventType = (type: WebSocketEvent['type']) => {
     setSelectedTypes(prev => {
@@ -174,7 +222,7 @@ export function ActivityFeed({
         <button
           onClick={onClearEvents}
           className="px-3 py-1 text-sm bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          disabled={events.length === 0}
+          disabled={allEvents.length === 0}
         >
           Clear History
         </button>
@@ -212,16 +260,22 @@ export function ActivityFeed({
 
       {/* Activity List */}
       <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden">
-        {filteredEvents.length === 0 ? (
+        {loadingHistory ? (
+          <div className="text-center py-16 px-4">
+            <div className="text-6xl mb-4 animate-spin">⏳</div>
+            <h3 className="text-2xl font-bold mb-2">Loading Activity...</h3>
+            <p className="text-slate-400">Fetching historical blockchain events...</p>
+          </div>
+        ) : filteredEvents.length === 0 ? (
           <div className="text-center py-16 px-4">
             <div className="text-6xl mb-4">📡</div>
             <h3 className="text-2xl font-bold mb-2">No Activity Yet</h3>
             <p className="text-slate-400 mb-4">
-              {events.length === 0
+              {allEvents.length === 0
                 ? 'Waiting for blockchain events...'
                 : 'No events match your filters. Try selecting different event types above.'}
             </p>
-            {events.length > 0 && (
+            {allEvents.length > 0 && (
               <button
                 onClick={() => setSelectedTypes(new Set([
                   'nftMinted', 
@@ -275,8 +329,8 @@ export function ActivityFeed({
       {/* Summary */}
       <div className="text-center text-sm text-slate-400">
         <p>
-          Showing {filteredEvents.length} of {events.length} events
-          {events.length >= limit && ` (limited to ${limit} most recent)`}
+          Showing {filteredEvents.length} of {allEvents.length} events
+          {allEvents.length >= limit && ` (limited to ${limit} most recent)`}
         </p>
       </div>
     </div>

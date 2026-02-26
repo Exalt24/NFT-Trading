@@ -15,7 +15,7 @@ export const env = {
   RPC_URL: process.env.RPC_URL || 'http://127.0.0.1:8545',
   NFT_CONTRACT_ADDRESS: process.env.NFT_CONTRACT_ADDRESS || '',
   MARKETPLACE_CONTRACT_ADDRESS: process.env.MARKETPLACE_CONTRACT_ADDRESS || '',
-  CHAIN_ID: parseInt(process.env.CHAIN_ID || '31338'),
+  CHAIN_ID: parseInt(process.env.CHAIN_ID || '31337'),
   START_BLOCK: parseInt(process.env.START_BLOCK || '0'),
   
   PINATA_JWT: process.env.PINATA_JWT || '',

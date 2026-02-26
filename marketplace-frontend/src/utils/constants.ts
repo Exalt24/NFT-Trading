@@ -4,7 +4,7 @@ export const WS_URL = import.meta.env.VITE_WEBSOCKET_URL || 'http://localhost:40
 export const NFT_CONTRACT_ADDRESS = import.meta.env.VITE_NFT_CONTRACT_ADDRESS;
 export const MARKETPLACE_CONTRACT_ADDRESS = import.meta.env.VITE_MARKETPLACE_CONTRACT_ADDRESS;
 
-export const CHAIN_ID = 31338;
+export const CHAIN_ID = 31337;
 export const CHAIN_NAME = 'Localhost';
 
 export const IPFS_GATEWAY = 'https://ipfs.io/ipfs/';

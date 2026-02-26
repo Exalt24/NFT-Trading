@@ -130,6 +130,22 @@ marketplaceRoutes.get('/marketplace/expensive-sales', async (req, res) => {
   }
 });
 
+marketplaceRoutes.get('/marketplace/activity', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit as string) || 50;
+
+    if (limit < 1 || limit > 200) {
+      return res.status(400).json({ error: 'Limit must be between 1 and 200' });
+    }
+
+    const activity = await marketplaceService.getActivityHistory(limit);
+    res.json(activity);
+  } catch (error) {
+    console.error('Error getting activity history:', error);
+    res.status(500).json({ error: 'Failed to retrieve activity history' });
+  }
+});
+
 marketplaceRoutes.get('/marketplace/price-range', async (req, res) => {
   try {
     const minPrice = req.query.min as string;

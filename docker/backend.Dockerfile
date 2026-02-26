@@ -8,7 +8,7 @@ RUN apk add --no-cache python3 make g++ curl
 COPY package*.json ./
 
 # Install ALL dependencies (including devDependencies for tsx)
-RUN npm ci
+RUN npm install
 
 # Copy source code
 COPY . .
