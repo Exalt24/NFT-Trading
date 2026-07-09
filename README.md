@@ -105,8 +105,8 @@ That's it! This command:
 
 ```powershell
 # Clone repository
-git clone <repository-url>
-cd nft-trading-game
+git clone https://github.com/Exalt24/NFT-Trading.git
+cd NFT-Trading
 
 # Start everything (Docker handles all configuration)
 .\scripts\docker-up.ps1
@@ -156,6 +156,8 @@ Account #0: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 (Owner)
 Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ```
 
+> **Note:** This is the well-known public Hardhat default test account #0, not a real secret. It ships with every Hardhat node and only holds funds on your local chain, so it's safe to paste here. Never use it on a public network.
+
 ### 2. Mint Your First NFT
 
 1. Open Creator Dashboard: http://localhost:3003
@@ -199,7 +201,7 @@ Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
 ## 📁 Project Structure
 
 ```
-nft-trading-game/
+NFT-Trading/
 ├── contracts/              # Smart contracts
 │   ├── contracts/          # Solidity files (GameNFT.sol, Marketplace.sol)
 │   ├── test/              # Contract tests (52 tests)
@@ -392,10 +394,10 @@ npx tsx tests/e2e/full-stack.test.ts
 npx tsx scripts/verify-stack.ts
 
 # Comprehensive health check:
-# ✅ PostgreSQL: Connection + table existence
-# ✅ Backend API: Health endpoint + NFT count
-# ✅ World State: 100 tiles initialized (if applicable)
-# ✅ Game Client: HTTP accessibility
+# ✅ PostgreSQL: Container status + schema table count
+# ✅ Backend API: Health endpoint accessibility
+# ✅ Smart Contracts: Deployed addresses found
+# ✅ Marketplace: HTTP accessibility
 # ✅ Creator Dashboard: HTTP accessibility
 
 # Expected output: All services [OK] in green
@@ -768,7 +770,7 @@ This is a demonstration project showcasing a complete NFT marketplace implementa
 1. **Fork the repository**
    ```bash
    git clone <your-fork-url>
-   cd nft-trading-game
+   cd NFT-Trading
    ```
 
 2. **Create a feature branch**
@@ -892,8 +894,8 @@ curl http://localhost:4001/health
 ```powershell
 # === DEPLOYMENT ===
 .\scripts\docker-up.ps1              # Start everything
-.\scripts\docker-down.ps1            # Stop (keep data)
-.\scripts\docker-down.ps1 -v         # Stop (delete data)
+.\scripts\docker-down.ps1 -keep-data # Stop (keep data)
+.\scripts\docker-down.ps1            # Stop (delete data, asks to confirm)
 
 # === LOGS ===
 .\scripts\docker-logs.ps1            # All services
@@ -928,7 +930,7 @@ docker-compose restart creator-dashboard
 
 **Last Updated:** October 2025
 
-**Made with ❤️ for the blockchain gaming community**
+**Made with ❤️ for the blockchain and NFT community**
 
 ---
 
