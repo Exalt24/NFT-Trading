@@ -6,7 +6,7 @@ Complete testing documentation for the NFT Trading Platform.
 
 | Suite | Location | Tests | Duration | Purpose |
 |-------|----------|-------|----------|---------|
-| Smart Contracts | `contracts/test/` | 52 | <15s | Contract logic verification |
+| Smart Contracts | `contracts/test/` | 62 | <15s | Contract logic verification |
 | Integration | `tests/integration/` | 4 | ~90s | Cross-component flows |
 | E2E | `tests/e2e/` | 1 | ~120s | Full stack lifecycle |
 | Manual | Browser | N/A | Varies | User acceptance testing |
@@ -19,9 +19,9 @@ Complete testing documentation for the NFT Trading Platform.
 cd contracts
 npx hardhat test
 
-# Expected: 52 tests passing
+# Expected: 62 tests passing
 # - GameNFT.test.ts: 27 tests
-# - Marketplace.test.ts: 25 tests
+# - Marketplace.test.ts: 35 tests
 ```
 
 ### Integration Tests
@@ -62,7 +62,7 @@ npx tsx scripts/verify-stack.ts
 
 ## Test Coverage
 
-### Contract Tests (52 total)
+### Contract Tests (62 total)
 
 **GameNFT.sol (27 tests)**
 - Deployment and initialization
@@ -72,13 +72,13 @@ npx tsx scripts/verify-stack.ts
 - Access control (owner-only functions)
 - ERC-721 and ERC-2981 compliance
 
-**Marketplace.sol (25 tests)**
+**Marketplace.sol (35 tests)**
 - Listing creation and management
 - NFT purchasing with payment distribution
 - Price updates and cancellations
 - Platform fee management
 - Royalty payment integration
-- Reentrancy protection
+- Overpayment refund
 
 ### Integration Tests (4 suites)
 
