@@ -155,7 +155,7 @@ cd scripts
 npm run test-all
 ```
 
-`test-all` runs four scripts from `tests/integration/` against the running stack: the mint flow (contract, IPFS, backend, API), the marketplace flow (list, buy, ownership transfer), the WebSocket flow (room subscriptions and event broadcasting) and the analytics flow (platform statistics). They are scripts that exit non-zero on failure, not a test-framework suite with a test count. The mint flow uploads to IPFS, so it expects Pinata to be configured.
+`test-all` runs four scripts from `tests/integration/` against the running stack: the mint flow (contract, IPFS, backend, API), the marketplace flow (list, buy, ownership transfer), the WebSocket flow (room subscriptions and event broadcasting) and the analytics flow (platform statistics). They are scripts, not a test-framework suite: the four scripts hold about 43 assert calls between them, and the end-to-end script adds about 18 more. All of them need the running Docker stack. The mint flow uploads to IPFS, so it expects Pinata to be configured.
 
 `tests/e2e/full-stack.test.ts` (`npx tsx tests/e2e/full-stack.test.ts`) runs a longer lifecycle across mints, listings, purchases, analytics and WebSocket events.
 
