@@ -40,3 +40,5 @@ logs/
 
 # Screenshots
 Screenshots/
+# local secrets
+.env.docker
