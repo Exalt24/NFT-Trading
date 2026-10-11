@@ -113,9 +113,11 @@ async function getDeployedAddresses(): Promise<DeploymentAddresses> {
   }
 }
 
-function updateEnvFile(path: string, name: string, nftAddress: string, marketplaceAddress: string, prefix: string = ''): void {
+function updateEnvFile(path: string, name: string, nftAddress: string, marketplaceAddress: string, prefix: string = '', createIfMissing: boolean = false): void {
   try {
-    let content = readFileSync(path, 'utf8');
+    // docker-compose reads the root .env for the contract addresses it passes to the backend and
+    // both frontends, and a fresh clone has no .env, so the root one is created when it is missing.
+    let content = createIfMissing && !existsSync(path) ? '' : readFileSync(path, 'utf8');
     
     const nftVar = `${prefix}NFT_CONTRACT_ADDRESS`;
     const marketplaceVar = `${prefix}MARKETPLACE_CONTRACT_ADDRESS`;
@@ -150,7 +152,7 @@ async function updateHostEnvFiles(addresses: DeploymentAddresses): Promise<void>
   const marketplaceEnvPath = join(process.cwd(), 'marketplace-frontend', '.env');
   const creatorEnvPath = join(process.cwd(), 'creator-dashboard', '.env');
 
-  updateEnvFile(rootEnvPath, '.env (root)', addresses.gameNFT, addresses.marketplace);
+  updateEnvFile(rootEnvPath, '.env (root)', addresses.gameNFT, addresses.marketplace, '', true);
   updateEnvFile(backendEnvPath, 'backend/.env', addresses.gameNFT, addresses.marketplace);
   updateEnvFile(marketplaceEnvPath, 'marketplace-frontend/.env', addresses.gameNFT, addresses.marketplace, 'VITE_');
   updateEnvFile(creatorEnvPath, 'creator-dashboard/.env', addresses.gameNFT, addresses.marketplace, 'VITE_');

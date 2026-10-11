@@ -538,10 +538,9 @@ function App() {
       {/* Footer */}
       <footer className="mt-16 py-8 border-t border-slate-800">
         <div className="max-w-7xl mx-auto px-4 text-center text-slate-500 text-sm">
-          <p className="mb-2">NFT Marketplace - Phase 3 Complete ✅</p>
+          <p className="mb-2">NFT Marketplace, local Hardhat demo</p>
           <div className="flex justify-center space-x-4">
             <span className="text-green-400">🟢 Frontend: Running</span>
-            <span>⚪ Backend: Check Port 4000</span>
             <span className={wsConnected ? 'text-green-400' : ''}>
               {wsConnected ? '🟢 WebSocket: Connected' : '⚪ WebSocket: Disconnected'}
             </span>

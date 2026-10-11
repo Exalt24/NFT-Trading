@@ -9,7 +9,7 @@ services:
     ports:
       - "5433:5432"  # Changed from 5432 to avoid conflict
     volumes:
-      - nft_postgres_data:/var/lib/postgresql/data
+      - nft_postgres_data:/var/lib/postgresql  # postgres 18+ keeps its data in a versioned subdirectory of this mount
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s

@@ -313,7 +313,7 @@ export function ActivityFeed({
                     <p className="text-sm text-slate-300">
                       {getEventDetails(event)}
                     </p>
-                    {event.blockNumber && (
+                    {!!event.blockNumber && (
                       <p className="text-xs text-slate-500 mt-1">
                         Block #{event.blockNumber}
                       </p>

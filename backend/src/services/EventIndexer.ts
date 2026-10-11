@@ -247,6 +247,13 @@ export class EventIndexer {
         } catch {
           // Silently handle missing IPFS metadata
         }
+      } else if (tokenURI.startsWith('data:application/json;base64,')) {
+        // Metadata embedded in the tokenURI itself (the demo seed uses this instead of IPFS)
+        try {
+          metadata = JSON.parse(Buffer.from(tokenURI.slice('data:application/json;base64,'.length), 'base64').toString('utf8'));
+        } catch {
+          // Malformed inline metadata: index the token without it
+        }
       }
 
       const block = await event.getBlock();

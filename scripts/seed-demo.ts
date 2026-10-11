@@ -7,13 +7,14 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ── Config ──────────────────────────────────────────────────────────
-const RPC_URL = 'http://localhost:8546';
-const NFT_ADDRESS = '0x5FbDB2315678afecb367f032d93F642f64180aa3';
-const MARKETPLACE_ADDRESS = '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
+// Defaults match docker-compose.yml and the first two contracts a fresh Hardhat node deploys.
+const RPC_URL = process.env.RPC_URL || 'http://localhost:8546';
+const NFT_ADDRESS = process.env.NFT_CONTRACT_ADDRESS || '0x5FbDB2315678afecb367f032d93F642f64180aa3';
+const MARKETPLACE_ADDRESS = process.env.MARKETPLACE_CONTRACT_ADDRESS || '0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512';
 const PINATA_JWT = process.env.PINATA_JWT || '';
 const PINATA_GATEWAY = process.env.PINATA_GATEWAY || 'gateway.pinata.cloud';
 
-// Hardhat accounts
+// Hardhat's public default test accounts #0 and #1 (every Hardhat node ships them; they only hold local test ETH)
 const OWNER_KEY = '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80';
 const BUYER_KEY = '0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d';
 
@@ -194,21 +195,35 @@ async function main() {
   const nft = new ethers.Contract(NFT_ADDRESS, nftABI, owner);
   const marketplace = new ethers.Contract(MARKETPLACE_ADDRESS, marketABI, owner);
 
-  // ── Phase 1: Upload SVGs and metadata to Pinata, mint NFTs ────
-  console.log('📸 Phase 1: Generating art, uploading to IPFS, minting...\n');
+  // ── Phase 1: Build art and metadata, mint NFTs ────────────────
+  // With PINATA_JWT set, art and metadata go to IPFS. Without it the metadata is embedded
+  // in the tokenURI as a data: URI and the image inside it as a data: URI, so the demo
+  // needs no external account or network.
+  const useIPFS = PINATA_JWT.length > 0;
+  console.log(`Phase 1: generating art, ${useIPFS ? 'uploading to IPFS' : 'embedding metadata in the tokenURI (no Pinata)'}, minting...\n`);
 
   const mintedTokenIds: bigint[] = [];
+  // Track the nonce ourselves: the provider caches the transaction count and Hardhat rejects a stale one
+  let mintNonce = await provider.getTransactionCount(owner.address, 'latest');
 
   for (let i = 0; i < NFT_COLLECTION.length; i++) {
     const item = NFT_COLLECTION[i];
     const svg = item.gen(item.name, i);
+    const slug = item.name.toLowerCase().replace(/\s+/g, '-');
 
-    // Upload SVG image
     process.stdout.write(`  [${i + 1}/${NFT_COLLECTION.length}] ${item.name}... `);
-    const imageHash = await uploadToPinata(svg, `${item.name.toLowerCase().replace(/\s+/g, '-')}.svg`);
-    const imageUrl = `ipfs://${imageHash}`;
 
-    // Build and upload metadata
+    let imageUrl: string;
+    let imageLabel: string;
+    if (useIPFS) {
+      const imageHash = await uploadToPinata(svg, `${slug}.svg`);
+      imageUrl = `ipfs://${imageHash}`;
+      imageLabel = `${imageHash.slice(0, 8)}...`;
+    } else {
+      imageUrl = `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+      imageLabel = 'inline svg';
+    }
+
     const metadata = {
       name: item.name,
       description: item.desc,
@@ -219,11 +234,12 @@ async function main() {
         { trait_type: 'Power', value: item.power },
       ],
     };
-    const metadataHash = await uploadMetadata(metadata, item.name.toLowerCase().replace(/\s+/g, '-'));
-    const tokenURI = `ipfs://${metadataHash}`;
+    const tokenURI = useIPFS
+      ? `ipfs://${await uploadMetadata(metadata, slug)}`
+      : `data:application/json;base64,${Buffer.from(JSON.stringify(metadata)).toString('base64')}`;
 
     // Mint
-    const tx = await nft.mint(owner.address, tokenURI);
+    const tx = await nft.mint(owner.address, tokenURI, { nonce: mintNonce++ });
     const receipt = await tx.wait();
 
     // Get token ID from Minted event
@@ -233,7 +249,7 @@ async function main() {
     const tokenId = nft.interface.parseLog(mintedEvent)!.args.tokenId;
     mintedTokenIds.push(tokenId);
 
-    console.log(`✅ Token #${tokenId} (${imageHash.slice(0, 8)}...)`);
+    console.log(`✅ Token #${tokenId} (${imageLabel})`);
   }
 
   console.log(`\n🎉 Minted ${mintedTokenIds.length} NFTs\n`);

@@ -17,7 +17,11 @@ try {
 
 Write-Host ""
 Write-Host "[Step 2] Cleaning up old containers..." -ForegroundColor Yellow
-docker-compose down -v 2>$null
+# Windows PowerShell 5.1 turns any stderr line from a native command into a terminating error under "Stop",
+# and docker-compose writes its progress to stderr, so relax the preference around the cleanup call.
+$ErrorActionPreference = "Continue"
+docker-compose down -v 2>&1 | Out-Null
+$ErrorActionPreference = "Stop"
 Write-Host "[OK] Cleanup complete" -ForegroundColor Green
 
 Write-Host ""
