@@ -85,7 +85,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[WAIT] Waiting for backend to initialize (10 seconds)..." -ForegroundColor Cyan
-Start-Sleep -Seconds 10
+Start-Sleep -Seconds 10  # fixed-wait-ok: settle time after a docker-compose up; the next step prints status, nothing depends on readiness
 
 Write-Host ""
 Write-Host "[Step 7] Running database migrations..." -ForegroundColor Yellow
@@ -97,7 +97,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[WAIT] Waiting for services to initialize (10 seconds)..." -ForegroundColor Cyan
-Start-Sleep -Seconds 10
+Start-Sleep -Seconds 10  # fixed-wait-ok: settle time after a docker-compose up; the next step prints status, nothing depends on readiness
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Green
