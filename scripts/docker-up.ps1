@@ -41,8 +41,14 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-Write-Host "[WAIT] Waiting for services to be healthy (30 seconds)..." -ForegroundColor Cyan
-Start-Sleep -Seconds 30
+Write-Host "[WAIT] Waiting for services to be healthy (up to 120 seconds)..." -ForegroundColor Cyan
+$healthDeadline = (Get-Date).AddSeconds(120)
+do {                                              # poll the real condition (both containers healthy) instead of a fixed 30 s wait
+    $pg = docker inspect --format='{{.State.Health.Status}}' nft-marketplace-postgres
+    $hh = docker inspect --format='{{.State.Health.Status}}' nft-marketplace-hardhat
+    if ($pg -eq 'healthy' -and $hh -eq 'healthy') { break }
+    Start-Sleep -Seconds 2
+} while ((Get-Date) -lt $healthDeadline)
 
 $postgresHealthy = docker inspect --format='{{.State.Health.Status}}' nft-marketplace-postgres
 $hardhatHealthy = docker inspect --format='{{.State.Health.Status}}' nft-marketplace-hardhat
