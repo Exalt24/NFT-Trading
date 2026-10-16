@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 NFT Trading Game Contributors
+Copyright (c) 2025 Daniel Alexis Cruz
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -19,34 +19,3 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
-
----
-
-ADDITIONAL NOTICES:
-
-Smart Contract Security:
-This project includes smart contracts that have NOT been professionally audited.
-DO NOT deploy to mainnet or use with real funds without a comprehensive security
-audit by qualified professionals. The authors assume no liability for any losses
-incurred through the use of these contracts.
-
-Third-Party Dependencies:
-This software uses third-party libraries and frameworks, each governed by their
-own licenses:
-- OpenZeppelin Contracts (MIT License)
-- React (MIT License)
-- ethers.js (MIT License)
-- Hardhat (MIT License)
-- Vite (MIT License)
-- Tailwind CSS (MIT License)
-- Recharts (MIT License)
-- Socket.IO (MIT License)
-- Express (MIT License)
-- PostgreSQL (PostgreSQL License)
-
-Please review the licenses of all dependencies before deploying to production.
-
-Development Use Only:
-This project is designed for demonstration, education, and development purposes.
-It uses a local Hardhat network and test accounts. Production deployment requires
-additional configuration, security hardening, and professional review.
