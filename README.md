@@ -1,10 +1,12 @@
 # NFT Trading Platform
 
+[![CI](https://github.com/Exalt24/NFT-Trading/actions/workflows/ci.yml/badge.svg)](https://github.com/Exalt24/NFT-Trading/actions/workflows/ci.yml)
+
 ![Marketplace demo: connect a wallet, buy an NFT, resell it, then the live feed and analytics, on a local Hardhat chain](docs/demo.gif)
 
 *The real marketplace UI on a local Hardhat chain, driven through a scripted stand-in for MetaMask: connect, buy, resell, live activity feed, analytics. Silent, 37 seconds. [Full quality mp4](docs/demo.mp4). How it was recorded is [below](#how-the-demo-was-recorded).*
 
-An ERC-721 NFT marketplace and creator dashboard that runs on a local Hardhat chain. Creators mint single or batch NFTs with IPFS metadata, list them on a marketplace contract that pays royalties and a platform fee, and a PostgreSQL event indexer feeds a REST API and a Socket.IO feed that both frontends read. It is a demonstration project. It has never been deployed to a public network and its own security notes say a professional audit is required before any real use.
+ERC-721 NFT marketplace with batch minting, royalties and a PostgreSQL event indexer, on a local Hardhat chain. Creators mint single or batch NFTs with IPFS metadata, list them on a marketplace contract that pays royalties and a platform fee, and a PostgreSQL event indexer feeds a REST API and a Socket.IO feed that both frontends read. It is a demonstration project. It has never been deployed to a public network and its own security notes say a professional audit is required before any real use.
 
 ## What is in it
 
