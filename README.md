@@ -33,7 +33,7 @@ ERC-721 NFT marketplace with batch minting, royalties and a PostgreSQL event ind
 - 25 REST endpoints under `/api` (6 NFT, 10 marketplace, 9 analytics) plus `/health`
 - A Socket.IO server with room-based broadcasting
 - 5 PostgreSQL tables and 10 indexes (`backend/migrations/001_nft_tables.sql`), read and written through Prisma 7 (see [Data layer](#data-layer))
-- 14 backend unit tests (the cache and the retry helper) and 63 database tests against a real PostgreSQL, a TypeScript typecheck and a build, all run in CI
+- 14 backend unit tests (the cache and the retry helper) and 74 database tests against a real PostgreSQL, a TypeScript typecheck and a build, all run in CI
 
 ## Quick start
 
@@ -122,9 +122,9 @@ NFT-Trading/
 
 The backend reaches PostgreSQL through Prisma 7 (`backend/prisma/schema.prisma`). The tables are still built by `backend/migrations/001_nft_tables.sql` (`npm run migrate`). Prisma Migrate is not used, and `npm run db:drift` fails when the schema file and the migrated database disagree. Service methods keep their signatures and snake_case row types, so the routes did not change.
 
-Of the 36 data-access methods (counted 2026-10-22), 21 use Prisma Client only, 2 mix it with raw SQL and 13 are raw, written as `$queryRaw` or `$executeRaw` tagged templates with bound parameters. Raw stays for four reasons:
+Of the 36 data-access methods (counted 2026-10-22), 18 use Prisma Client only, 4 mix it with raw SQL and 14 are raw, written as `$queryRaw` or `$executeRaw` tagged templates with bound parameters. Raw stays for four reasons:
 
-- Price and fees are TEXT wei strings, so totals, averages, minimums and ordering by value need `CAST(... AS numeric)`, which `aggregate()` and `orderBy` cannot do. This is platform stats, top traders, volume over time, volume per NFT, most expensive sales and price distribution (analytics), trading volume (marketplace) and the volume half of user stats.
+- Price and fees are TEXT wei strings, so totals, averages, minimums, ranges and ordering by value need `CAST(... AS numeric)`, which `aggregate()`, `orderBy` and `where` cannot do. That covers most analytics methods, the marketplace floor price, price range, most expensive sales and trading volume, and the volume half of user stats.
 - Prisma has no syntax for sales by hour (`EXTRACT`), the activity feed (`UNION ALL`) or NFT search (`LIKE` on `token_id::text` plus `ILIKE` on a JSON field).
 - `createNFT`, `createListing`, the IPFS cache write and the first read of a sync marker are `INSERT ... ON CONFLICT`. Prisma 7.10.1 runs `upsert()` as a SELECT then an INSERT, and ten simultaneous calls for one key failed with P2002 in 3 of 6 runs on 2026-10-22.
 - `migrations/run.ts` stays on `pg`, because it sends a multi-statement file. The event indexer has no batched inserts, so nothing else is kept raw for speed.
@@ -135,14 +135,14 @@ cd backend
 npm install
 $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:55432/nft_marketplace"
 npm run migrate                           # apply the SQL migration
-npm run db:generate                       # build the Prisma Client (typecheck, build and dev also do it)
-npm run db:drift                          # schema.prisma against the migrated database
+npm run db:generate                       # build the Prisma Client
+npm run db:drift                          # schema file against the database
 npm test                                  # 14 unit tests, no database needed
-npm run test:db                           # 63 tests on a rebuilt nft_marketplace_test database
-npm run test:db:mutation                  # breaks 9 guards one at a time, expects red each time
+npm run test:db                           # 74 tests on a rebuilt _test database
+npm run test:db:mutation                  # breaks 15 guards one at a time, expects red each time
 ```
 
-On 2026-10-22, before the port: typecheck clean, 14 unit tests passed. After: typecheck clean, the same 14 plus 63 database tests pass (63 in 5.0 seconds on a fresh clone), 9 of 9 mutations are caught, and CI runs the typecheck, unit tests, drift check and database tests against a Postgres service. Each database test file opens with positive controls. Known limits are in [docs/DATA_LAYER.md](docs/DATA_LAYER.md).
+On 2026-10-22, before the port: typecheck clean, 14 unit tests passed. After: typecheck clean, the same 14 plus 74 database tests pass (74 in 5.5 seconds), 15 of 15 mutations are caught, and CI runs all of them against a Postgres service. Each database test file opens with positive controls. On 2026-10-22 the floor price, price range filter, marketplace most expensive sales and price distribution moved to numeric comparison, so 10 ETH no longer sorts below 9 ETH. Known limits are in [docs/DATA_LAYER.md](docs/DATA_LAYER.md).
 
 ## Testing
 
