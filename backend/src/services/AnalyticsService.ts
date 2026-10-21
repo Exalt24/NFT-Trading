@@ -1,44 +1,52 @@
-import { pool } from '../config/database.js';
+import { prisma } from '../config/database.js';
+import { ci } from './prismaHelpers.js';
 import type { PlatformStats, Trader, VolumeData, Sale } from '../types/database.js';
+
+// Why so many $queryRaw calls in this file: price, platform_fee and royalty_fee are TEXT columns holding wei strings, so every sum,
+// average, minimum and sort by value needs CAST(... AS numeric), and Prisma's aggregate() and orderBy cannot cast. The numeric results
+// are cast to text in SQL so a 19-digit wei total stays exact (a JS number or Prisma's Decimal would not print the same digits).
+// COUNT is cast to integer because Prisma returns a bigint for it, which JSON.stringify refuses to serialize.
+// Every raw statement uses bound parameters through the tagged template, never string concatenation.
+// COPY-OK: the template literals in this file are SQL statements, not screen text.
 
 export class AnalyticsService {
   async getPlatformStats(): Promise<PlatformStats> {
     try {
-      const salesResult = await pool.query(
-        `SELECT 
-          COUNT(*) as total_sales, 
-          COALESCE(SUM(CAST(price AS numeric)), 0) as total_volume, 
-          COALESCE(AVG(CAST(price AS numeric)), 0) as avg_price 
-        FROM trading_history`
-      );
+      // COPY-OK: SQL statement, not screen text
+      const sales = await prisma.$queryRaw<Array<{ total_sales: number; total_volume: string; avg_price: string }>>`
+        SELECT
+          COUNT(*)::integer AS total_sales,
+          COALESCE(SUM(CAST(price AS numeric)), 0)::text AS total_volume,
+          COALESCE(AVG(CAST(price AS numeric)), 0)::text AS avg_price
+        FROM trading_history`;
 
       // FIXED: Count unique addresses across both sellers and buyers (no double counting)
-      const tradersResult = await pool.query(
-        `SELECT COUNT(DISTINCT address) as unique_traders 
+      // COPY-OK: SQL statement, not screen text
+      const traders = await prisma.$queryRaw<Array<{ unique_traders: number }>>`
+        SELECT COUNT(DISTINCT address)::integer AS unique_traders
         FROM (
-          SELECT DISTINCT LOWER(seller) as address FROM trading_history
+          SELECT DISTINCT LOWER(seller) AS address FROM trading_history
           UNION
-          SELECT DISTINCT LOWER(buyer) as address FROM trading_history
-        ) AS all_traders`
-      );
+          SELECT DISTINCT LOWER(buyer) AS address FROM trading_history
+        ) AS all_traders`;
 
-      const floorResult = await pool.query(
-        `SELECT COALESCE(MIN(CAST(price AS numeric)), 0) as floor_price 
-        FROM marketplace_listings 
-        WHERE active = true`
-      );
+      // COPY-OK: SQL statement, not screen text
+      const floor = await prisma.$queryRaw<Array<{ floor_price: string }>>`
+        SELECT COALESCE(MIN(CAST(price AS numeric)), 0)::text AS floor_price
+        FROM marketplace_listings
+        WHERE active = true`;
 
-      const highestResult = await pool.query(
-        'SELECT COALESCE(MAX(CAST(price AS numeric)), 0) as highest_sale FROM trading_history'
-      );
+      // COPY-OK: SQL statement, not screen text
+      const highest = await prisma.$queryRaw<Array<{ highest_sale: string }>>`
+        SELECT COALESCE(MAX(CAST(price AS numeric)), 0)::text AS highest_sale FROM trading_history`;
 
       return {
-        totalSales: parseInt(salesResult.rows[0].total_sales) || 0,
-        totalVolume: salesResult.rows[0].total_volume.toString(),
-        uniqueTraders: parseInt(tradersResult.rows[0].unique_traders) || 0,
-        avgPrice: salesResult.rows[0].avg_price.toString(),
-        floorPrice: floorResult.rows[0].floor_price.toString(),
-        highestSale: highestResult.rows[0].highest_sale.toString(),
+        totalSales: sales[0].total_sales || 0,
+        totalVolume: sales[0].total_volume,
+        uniqueTraders: traders[0].unique_traders || 0,
+        avgPrice: sales[0].avg_price,
+        floorPrice: floor[0].floor_price,
+        highestSale: highest[0].highest_sale,
       };
     } catch (error) {
       console.error('❌ Failed to get platform stats:', error);
@@ -48,29 +56,29 @@ export class AnalyticsService {
 
   async getTopTraders(limit: number = 10): Promise<Trader[]> {
     try {
-      const result = await pool.query(
-        `WITH all_trades AS (
-          SELECT seller as address, CAST(price AS numeric) as price FROM trading_history
+      // The ORDER BY repeats SUM(price) instead of naming total_volume: that name is the text-cast output column, and sorting by it would sort as text.
+      // COPY-OK: SQL statement, not screen text
+      const rows = await prisma.$queryRaw<Array<{ address: string; trades_count: number; total_volume: string; average_price: string }>>`
+        WITH all_trades AS (
+          SELECT seller AS address, CAST(price AS numeric) AS price FROM trading_history
           UNION ALL
-          SELECT buyer as address, CAST(price AS numeric) as price FROM trading_history
+          SELECT buyer AS address, CAST(price AS numeric) AS price FROM trading_history
         )
-        SELECT 
+        SELECT
           address,
-          COUNT(*) as trades_count,
-          SUM(price) as total_volume,
-          AVG(price) as average_price
+          COUNT(*)::integer AS trades_count,
+          SUM(price)::text AS total_volume,
+          AVG(price)::text AS average_price
         FROM all_trades
         GROUP BY address
-        ORDER BY total_volume DESC
-        LIMIT $1`,
-        [limit]
-      );
+        ORDER BY SUM(price) DESC
+        LIMIT ${limit}`;
 
-      return result.rows.map(row => ({
+      return rows.map(row => ({
         address: row.address,
-        tradesCount: parseInt(row.trades_count),
-        totalVolume: row.total_volume.toString(),
-        avgPrice: row.average_price.toString(),
+        tradesCount: row.trades_count,
+        totalVolume: row.total_volume,
+        avgPrice: row.average_price,
       }));
     } catch (error) {
       console.error('❌ Failed to get top traders:', error);
@@ -80,21 +88,22 @@ export class AnalyticsService {
 
   async getTradingVolumeOverTime(days: number = 30): Promise<VolumeData[]> {
     try {
-      const result = await pool.query(
-        `SELECT 
-          DATE(sold_at) as date,
-          COALESCE(SUM(CAST(price AS numeric)), 0) as volume,
-          COUNT(*) as sales_count
+      // The window length is a bound parameter (make_interval), where the old code pasted ${days} into the SQL text.
+      // COPY-OK: SQL statement, not screen text
+      const rows = await prisma.$queryRaw<Array<{ date: Date; volume: string; sales_count: number }>>`
+        SELECT
+          DATE(sold_at) AS date,
+          COALESCE(SUM(CAST(price AS numeric)), 0)::text AS volume,
+          COUNT(*)::integer AS sales_count
         FROM trading_history
-        WHERE sold_at >= NOW() - INTERVAL '${days} days'
+        WHERE sold_at >= NOW() - make_interval(days => ${days}::integer)
         GROUP BY DATE(sold_at)
-        ORDER BY date ASC`
-      );
+        ORDER BY date ASC`;
 
-      return result.rows.map(row => ({
+      return rows.map(row => ({
         date: row.date.toISOString().split('T')[0],
-        volume: row.volume.toString(),
-        salesCount: parseInt(row.sales_count),
+        volume: row.volume,
+        salesCount: row.sales_count,
       }));
     } catch (error) {
       console.error('❌ Failed to get trading volume over time:', error);
@@ -104,8 +113,16 @@ export class AnalyticsService {
 
   async getMostExpensiveSales(limit: number = 10): Promise<Sale[]> {
     try {
-      const result = await pool.query(
-        `SELECT 
+      // COPY-OK: SQL statement, not screen text
+      const rows = await prisma.$queryRaw<Array<{
+        token_id: number;
+        price: string;
+        seller: string;
+        buyer: string;
+        sold_at: Date | null;
+        transaction_hash: string | null;
+      }>>`
+        SELECT
           token_id,
           price,
           seller,
@@ -114,11 +131,9 @@ export class AnalyticsService {
           transaction_hash
         FROM trading_history
         ORDER BY CAST(price AS numeric) DESC
-        LIMIT $1`,
-        [limit]
-      );
+        LIMIT ${limit}`;
 
-      return result.rows.map(row => ({
+      return rows.map(row => ({
         tokenId: row.token_id,
         price: row.price,
         seller: row.seller,
@@ -133,34 +148,35 @@ export class AnalyticsService {
   }
 
   async getPriceDistribution(): Promise<Array<{ range: string; count: number }>> {
-  try {
-    const result = await pool.query(
-      `SELECT 
-        CASE 
-          WHEN CAST(price AS numeric) < 0.1 THEN '0.00 - 0.09'
-          WHEN CAST(price AS numeric) >= 0.1 AND CAST(price AS numeric) < 0.5 THEN '0.10 - 0.49'
-          WHEN CAST(price AS numeric) >= 0.5 AND CAST(price AS numeric) < 1.0 THEN '0.50 - 0.99'
-          WHEN CAST(price AS numeric) >= 1.0 AND CAST(price AS numeric) < 5.0 THEN '1.00 - 4.99'
-          WHEN CAST(price AS numeric) >= 5.0 AND CAST(price AS numeric) < 10.0 THEN '5.00 - 9.99'
-          ELSE '10.00+'
-        END as range,
-        COUNT(*) as count
-      FROM marketplace_listings
-      WHERE active = true
-      GROUP BY range
-      ORDER BY 
-        MIN(CAST(price AS numeric))`
-    );
+    try {
+      // A CASE bucket plus GROUP BY on the bucket: not expressible in Prisma Client.
+      // COPY-OK: SQL statement, not screen text
+      const rows = await prisma.$queryRaw<Array<{ range: string; count: number }>>`
+        SELECT
+          CASE
+            WHEN CAST(price AS numeric) < 0.1 THEN '0.00 - 0.09'
+            WHEN CAST(price AS numeric) >= 0.1 AND CAST(price AS numeric) < 0.5 THEN '0.10 - 0.49'
+            WHEN CAST(price AS numeric) >= 0.5 AND CAST(price AS numeric) < 1.0 THEN '0.50 - 0.99'
+            WHEN CAST(price AS numeric) >= 1.0 AND CAST(price AS numeric) < 5.0 THEN '1.00 - 4.99'
+            WHEN CAST(price AS numeric) >= 5.0 AND CAST(price AS numeric) < 10.0 THEN '5.00 - 9.99'
+            ELSE '10.00+'
+          END AS range,
+          COUNT(*)::integer AS count
+        FROM marketplace_listings
+        WHERE active = true
+        GROUP BY range
+        ORDER BY
+          MIN(CAST(price AS numeric))`;
 
-    return result.rows.map(row => ({
-      range: row.range,
-      count: parseInt(row.count),
-    }));
-  } catch (error) {
-    console.error('❌ Failed to get price distribution:', error);
-    throw new Error('Failed to retrieve price distribution');
+      return rows.map(row => ({
+        range: row.range,
+        count: row.count,
+      }));
+    } catch (error) {
+      console.error('❌ Failed to get price distribution:', error);
+      throw new Error('Failed to retrieve price distribution');
+    }
   }
-}
 
   async getCreatorStats(creatorAddress: string): Promise<{
     totalMinted: number;
@@ -184,100 +200,75 @@ export class AnalyticsService {
     }>;
   }> {
     try {
+      // This method is all Prisma Client. Money is summed in JS with Number(), exactly as the old code did after its CAST.
 
       // 1. Count total NFTs minted
-      const mintedResult = await pool.query(
-        `SELECT COUNT(*) as total_minted 
-       FROM nfts 
-       WHERE LOWER(royalty_receiver) = LOWER($1)`,
-        [creatorAddress]
-      );
-      const totalMinted = parseInt(mintedResult.rows[0].total_minted) || 0;
+      const totalMinted = await prisma.nft.count({ where: { royaltyReceiver: ci(creatorAddress) } });
       console.log(`📊 Total Minted: ${totalMinted}`);
 
       // 2. Get ALL sales where creator was seller
-      const salesResult = await pool.query(
-        `SELECT 
-        token_id,
-        price,
-        buyer,
-        platform_fee,
-        royalty_fee,
-        sold_at,
-        CAST(price AS numeric) as price_numeric,
-        CAST(platform_fee AS numeric) as platform_fee_numeric,
-        CAST(royalty_fee AS numeric) as royalty_fee_numeric
-       FROM trading_history
-       WHERE LOWER(seller) = LOWER($1)
-       ORDER BY sold_at DESC`,
-        [creatorAddress]
-      );
+      const sales = await prisma.tradingHistory.findMany({
+        where: { seller: ci(creatorAddress) },
+        orderBy: { soldAt: 'desc' },
+      });
 
-      const totalSold = salesResult.rows.length;
+      const totalSold = sales.length;
 
       // Calculate BOTH gross and net
       let totalGrossSales = 0;     // What buyers paid (for average)
       let totalNetRevenue = 0;     // What creator received (for revenue)
 
-      salesResult.rows.forEach((row, index) => {
-        const grossPrice = Number(row.price_numeric) || 0;
-        const platformFee = Number(row.platform_fee_numeric) || 0;
-        const royaltyFee = Number(row.royalty_fee_numeric) || 0;
-        const netProceeds = grossPrice - platformFee - royaltyFee;
+      for (const sale of sales) {
+        const grossPrice = Number(sale.price) || 0;
+        const platformFee = Number(sale.platformFee) || 0;
+        const royaltyFee = Number(sale.royaltyFee) || 0;
 
         totalGrossSales += grossPrice;
-        totalNetRevenue += netProceeds;
-      });
+        totalNetRevenue += grossPrice - platformFee - royaltyFee;
+      }
 
       const avgPrice = totalSold > 0 ? (totalGrossSales / totalSold) : 0;
 
-      const salesHistory = salesResult.rows.map(row => ({
-        tokenId: row.token_id,
-        price: row.price,
-        buyer: row.buyer,
-        soldAt: row.sold_at,
-        platformFee: row.platform_fee,
-        royaltyFee: row.royalty_fee,
+      const salesHistory = sales.map(sale => ({
+        tokenId: sale.tokenId,
+        price: sale.price,
+        buyer: sale.buyer,
+        soldAt: sale.soldAt as Date,
+        platformFee: sale.platformFee,
+        royaltyFee: sale.royaltyFee,
       }));
 
-      // 3. Floor price
-      const floorPriceResult = await pool.query(
-        `SELECT COALESCE(MIN(CAST(price AS numeric)), 0) as floor_price 
-       FROM marketplace_listings 
-       WHERE LOWER(seller) = LOWER($1) 
-       AND active = true`,
-        [creatorAddress]
-      );
-      const floorPrice = Number(floorPriceResult.rows[0].floor_price) || 0;
+      // 3. Floor price: the creator's cheapest active listing
+      const activeListings = await prisma.marketplaceListing.findMany({
+        where: { seller: ci(creatorAddress), active: true },
+        select: { price: true },
+      });
+      const floorPrice = activeListings.length > 0
+        ? Math.min(...activeListings.map(listing => Number(listing.price))) || 0
+        : 0;
 
-      // 4. Royalties
-      const royaltiesResult = await pool.query(
-        `SELECT 
-        th.token_id,
-        th.royalty_fee,
-        th.sold_at,
-        CAST(th.royalty_fee AS numeric) as royalty_numeric
-       FROM trading_history th
-       INNER JOIN nfts n ON th.token_id = n.token_id
-       WHERE LOWER(n.royalty_receiver) = LOWER($1)
-       AND LOWER(th.seller) != LOWER($1)
-       AND CAST(th.royalty_fee AS numeric) > 0
-       ORDER BY th.sold_at DESC`,
-        [creatorAddress]
-      );
+      // 4. Royalties: sales of NFTs this creator minted, made by someone else. The `nft` filter is the logical relation in
+      // schema.prisma (an inner join on token_id); the fee > 0 test runs in JS because the fee is a TEXT column.
+      const royaltySales = (await prisma.tradingHistory.findMany({
+        where: {
+          nft: { royaltyReceiver: ci(creatorAddress) },
+          NOT: { seller: ci(creatorAddress) },
+        },
+        orderBy: { soldAt: 'desc' },
+      })).filter(sale => Number(sale.royaltyFee) > 0);
 
-      const totalRoyalties = royaltiesResult.rows.reduce(
-        (sum, row) => sum + (Number(row.royalty_numeric) || 0),
+      const totalRoyalties = royaltySales.reduce(
+        (sum, sale) => sum + (Number(sale.royaltyFee) || 0),
         0
       );
 
-      const royaltyHistory = royaltiesResult.rows.map(row => ({
-        tokenId: row.token_id,
-        royaltyFee: row.royalty_fee,
-        soldAt: row.sold_at,
+      const royaltyHistory = royaltySales.map(sale => ({
+        tokenId: sale.tokenId,
+        royaltyFee: sale.royaltyFee,
+        soldAt: sale.soldAt as Date,
       }));
 
-      const result = {
+      return {
         totalMinted,
         totalSold,
         totalRevenue: totalNetRevenue.toString(),
@@ -287,8 +278,6 @@ export class AnalyticsService {
         salesHistory,
         royaltyHistory,
       };
-
-      return result;
     } catch (error) {
       console.error(`❌ Failed to get creator stats:`, error);
       throw new Error('Failed to retrieve creator statistics');
@@ -297,22 +286,21 @@ export class AnalyticsService {
 
   async getVolumeByNFT(limit: number = 10): Promise<Array<{ tokenId: number; totalVolume: string; salesCount: number }>> {
     try {
-      const result = await pool.query(
-        `SELECT 
+      // COPY-OK: SQL statement, not screen text
+      const rows = await prisma.$queryRaw<Array<{ token_id: number; volume: string; sales_count: number }>>`
+        SELECT
           token_id,
-          SUM(CAST(price AS numeric)) as volume,
-          COUNT(*) as sales_count
+          SUM(CAST(price AS numeric))::text AS volume,
+          COUNT(*)::integer AS sales_count
         FROM trading_history
         GROUP BY token_id
-        ORDER BY volume DESC
-        LIMIT $1`,
-        [limit]
-      );
+        ORDER BY SUM(CAST(price AS numeric)) DESC
+        LIMIT ${limit}`;
 
-      return result.rows.map(row => ({
+      return rows.map(row => ({
         tokenId: row.token_id,
-        totalVolume: row.volume.toString(),
-        salesCount: parseInt(row.sales_count),
+        totalVolume: row.volume,
+        salesCount: row.sales_count,
       }));
     } catch (error) {
       console.error('❌ Failed to get volume by NFT:', error);
@@ -322,19 +310,20 @@ export class AnalyticsService {
 
   async getSalesByTimeOfDay(): Promise<Array<{ hour: number; salesCount: number }>> {
     try {
-      const result = await pool.query(
-        `SELECT 
-          EXTRACT(HOUR FROM sold_at) as hour,
-          COUNT(*) as count
+      // Raw on purpose: grouping by EXTRACT(HOUR ...) of a timestamp has no Prisma Client equivalent.
+      // COPY-OK: SQL statement, not screen text
+      const rows = await prisma.$queryRaw<Array<{ hour: number; count: number }>>`
+        SELECT
+          EXTRACT(HOUR FROM sold_at)::integer AS hour,
+          COUNT(*)::integer AS count
         FROM trading_history
         WHERE sold_at IS NOT NULL
         GROUP BY hour
-        ORDER BY hour`
-      );
+        ORDER BY hour`;
 
-      return result.rows.map(row => ({
-        hour: parseInt(row.hour),
-        salesCount: parseInt(row.count),
+      return rows.map(row => ({
+        hour: row.hour,
+        salesCount: row.count,
       }));
     } catch (error) {
       console.error('❌ Failed to get sales by time of day:', error);
@@ -352,39 +341,29 @@ export class AnalyticsService {
     activeListings: number;
   }> {
     try {
-      const ownedResult = await pool.query(
-        'SELECT COUNT(*) as count FROM nfts WHERE LOWER(owner) = LOWER($1)',
-        [address]
-      );
-
-      const mintedResult = await pool.query(
-        'SELECT COUNT(*) as count FROM nfts WHERE LOWER(owner) = LOWER($1) AND minted_at IS NOT NULL',
-        [address]
-      );
-
-      const salesResult = await pool.query(
-        'SELECT COUNT(*) as count, COALESCE(SUM(CAST(price AS numeric)), 0) as volume FROM trading_history WHERE LOWER(seller) = LOWER($1)',
-        [address]
-      );
-
-      const purchasesResult = await pool.query(
-        'SELECT COUNT(*) as count, COALESCE(SUM(CAST(price AS numeric)), 0) as volume FROM trading_history WHERE LOWER(buyer) = LOWER($1)',
-        [address]
-      );
-
-      const listingsResult = await pool.query(
-        'SELECT COUNT(*) as count FROM marketplace_listings WHERE LOWER(seller) = LOWER($1) AND active = true',
-        [address]
-      );
+      // The three plain counts are Prisma Client. The two volume figures sum a TEXT price, so they stay raw (see the top of the file).
+      const [nftsOwned, nftsMinted, activeListings, asSeller, asBuyer] = await Promise.all([
+        prisma.nft.count({ where: { owner: ci(address) } }),
+        prisma.nft.count({ where: { owner: ci(address), mintedAt: { not: null } } }),
+        prisma.marketplaceListing.count({ where: { seller: ci(address), active: true } }),
+        // COPY-OK: SQL statement, not screen text
+        prisma.$queryRaw<Array<{ count: number; volume: string }>>`
+          SELECT COUNT(*)::integer AS count, COALESCE(SUM(CAST(price AS numeric)), 0)::text AS volume
+          FROM trading_history WHERE LOWER(seller) = LOWER(${address})`,
+        // COPY-OK: SQL statement, not screen text
+        prisma.$queryRaw<Array<{ count: number; volume: string }>>`
+          SELECT COUNT(*)::integer AS count, COALESCE(SUM(CAST(price AS numeric)), 0)::text AS volume
+          FROM trading_history WHERE LOWER(buyer) = LOWER(${address})`,
+      ]);
 
       return {
-        nftsOwned: parseInt(ownedResult.rows[0].count),
-        nftsMinted: parseInt(mintedResult.rows[0].count),
-        totalSales: parseInt(salesResult.rows[0].count),
-        totalPurchases: parseInt(purchasesResult.rows[0].count),
-        volumeAsSeller: salesResult.rows[0].volume.toString(),
-        volumeAsBuyer: purchasesResult.rows[0].volume.toString(),
-        activeListings: parseInt(listingsResult.rows[0].count),
+        nftsOwned,
+        nftsMinted,
+        totalSales: asSeller[0].count,
+        totalPurchases: asBuyer[0].count,
+        volumeAsSeller: asSeller[0].volume,
+        volumeAsBuyer: asBuyer[0].volume,
+        activeListings,
       };
     } catch (error) {
       console.error(`❌ Failed to get user stats for ${address}:`, error);
@@ -392,7 +371,5 @@ export class AnalyticsService {
     }
   }
 }
-
-
 
 export const analyticsService = new AnalyticsService();

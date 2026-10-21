@@ -1,5 +1,6 @@
 import { pinata, getIPFSUrl } from '../config/ipfs.js';
-import { pool } from '../config/database.js';
+import { prisma } from '../config/database.js';
+import type { Prisma } from '../generated/prisma/client.js';
 import type {
   NFTMetadata,
   IPFSUploadResult,
@@ -94,13 +95,12 @@ export class IPFSService {
 
   private async cacheMetadata(cid: string, metadata: NFTMetadata): Promise<void> {
     try {
-      await pool.query(
-        `INSERT INTO ipfs_metadata_cache (cid, metadata, cached_at)
-         VALUES ($1, $2, NOW())
-         ON CONFLICT (cid) DO UPDATE
-         SET metadata = $2, cached_at = NOW()`,
-        [cid, JSON.stringify(metadata)]
-      );
+      const json = metadata as unknown as Prisma.InputJsonValue;
+      await prisma.ipfsMetadataCache.upsert({
+        where: { cid },
+        create: { cid, metadata: json, cachedAt: new Date() },
+        update: { metadata: json, cachedAt: new Date() },
+      });
     } catch (error) {
       console.error('⚠️  Failed to cache metadata:', error);
     }
@@ -108,16 +108,8 @@ export class IPFSService {
 
   private async getCachedMetadata(cid: string): Promise<NFTMetadata | null> {
     try {
-      const result = await pool.query(
-        'SELECT metadata FROM ipfs_metadata_cache WHERE cid = $1',
-        [cid]
-      );
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
-      return result.rows[0].metadata as NFTMetadata;
+      const cached = await prisma.ipfsMetadataCache.findUnique({ where: { cid } });
+      return cached ? (cached.metadata as unknown as NFTMetadata) : null;
     } catch (error) {
       console.error('⚠️  Failed to retrieve cached metadata:', error);
       return null;

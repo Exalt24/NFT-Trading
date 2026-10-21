@@ -1,16 +1,16 @@
-import { pool } from '../config/database.js';
+import { prisma } from '../config/database.js';
+import { ci } from './prismaHelpers.js';
+import { toListingRow, toHistoryRow } from './rowMappers.js';
 import type { MarketplaceListingRow, TradingHistoryRow } from '../types/database.js';
 
 export class MarketplaceService {
   async getActiveListings(): Promise<MarketplaceListingRow[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM marketplace_listings 
-         WHERE active = true 
-         ORDER BY listed_at DESC NULLS LAST, created_at DESC`
-      );
-
-      return result.rows as MarketplaceListingRow[];
+      const listings = await prisma.marketplaceListing.findMany({
+        where: { active: true },
+        orderBy: [{ listedAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      });
+      return listings.map(toListingRow);
     } catch (error) {
       console.error('❌ Failed to get active listings:', error);
       throw new Error('Failed to retrieve active listings');
@@ -22,18 +22,10 @@ export class MarketplaceService {
     tokenId: number
   ): Promise<MarketplaceListingRow | null> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM marketplace_listings 
-         WHERE LOWER(nft_contract) = LOWER($1) 
-         AND token_id = $2`,
-        [nftContract, tokenId]
-      );
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
-      return result.rows[0] as MarketplaceListingRow;
+      const listing = await prisma.marketplaceListing.findFirst({
+        where: { nftContract: ci(nftContract), tokenId },
+      });
+      return listing ? toListingRow(listing) : null;
     } catch (error) {
       console.error(`❌ Failed to get listing for token ${tokenId}:`, error);
       throw new Error('Failed to retrieve listing');
@@ -42,14 +34,11 @@ export class MarketplaceService {
 
   async getListingsBySeller(seller: string): Promise<MarketplaceListingRow[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM marketplace_listings 
-         WHERE LOWER(seller) = LOWER($1) 
-         ORDER BY active DESC, listed_at DESC NULLS LAST`,
-        [seller]
-      );
-
-      return result.rows as MarketplaceListingRow[];
+      const listings = await prisma.marketplaceListing.findMany({
+        where: { seller: ci(seller) },
+        orderBy: [{ active: 'desc' }, { listedAt: { sort: 'desc', nulls: 'last' } }],
+      });
+      return listings.map(toListingRow);
     } catch (error) {
       console.error(`❌ Failed to get listings for seller ${seller}:`, error);
       throw new Error('Failed to retrieve seller listings');
@@ -58,14 +47,11 @@ export class MarketplaceService {
 
   async getFloorPrice(): Promise<string> {
     try {
-      const result = await pool.query(
-        `SELECT MIN(price) as floor_price 
-         FROM marketplace_listings 
-         WHERE active = true`
-      );
-
-      const floorPrice = result.rows[0].floor_price;
-      return floorPrice ? floorPrice.toString() : '0';
+      const floor = await prisma.marketplaceListing.aggregate({
+        where: { active: true },
+        _min: { price: true },
+      });
+      return floor._min.price ?? '0';
     } catch (error) {
       console.error('❌ Failed to get floor price:', error);
       throw new Error('Failed to retrieve floor price');
@@ -74,16 +60,17 @@ export class MarketplaceService {
 
   async getTradingVolume(): Promise<{ totalVolume: string; totalSales: number }> {
     try {
-      const result = await pool.query(
-        `SELECT 
-          COALESCE(SUM(CAST(price AS numeric)), 0)::text as total_volume,
-          COUNT(*)::integer as total_sales
-        FROM trading_history`
-      );
+      // Raw on purpose: price is TEXT (wei strings), so summing it needs CAST(price AS numeric), which Prisma's aggregate()
+      // cannot express. The result is cast to text so a 19-digit wei total stays exact instead of passing through a JS number.
+      const rows = await prisma.$queryRaw<Array<{ total_volume: string; total_sales: number }>>`
+        SELECT
+          COALESCE(SUM(CAST(price AS numeric)), 0)::text AS total_volume,
+          COUNT(*)::integer AS total_sales
+        FROM trading_history`;
 
       return {
-        totalVolume: result.rows[0].total_volume || '0',
-        totalSales: parseInt(result.rows[0].total_sales) || 0
+        totalVolume: rows[0].total_volume || '0',
+        totalSales: rows[0].total_sales || 0,
       };
     } catch (error) {
       console.error('❌ Failed to get trading volume:', error);
@@ -96,15 +83,11 @@ export class MarketplaceService {
     tokenId: number
   ): Promise<TradingHistoryRow[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM trading_history 
-         WHERE LOWER(nft_contract) = LOWER($1) 
-         AND token_id = $2 
-         ORDER BY sold_at DESC NULLS LAST, created_at DESC`,
-        [nftContract, tokenId]
-      );
-
-      return result.rows as TradingHistoryRow[];
+      const sales = await prisma.tradingHistory.findMany({
+        where: { nftContract: ci(nftContract), tokenId },
+        orderBy: [{ soldAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+      });
+      return sales.map(toHistoryRow);
     } catch (error) {
       console.error(`❌ Failed to get price history for token ${tokenId}:`, error);
       throw new Error('Failed to retrieve price history');
@@ -119,18 +102,14 @@ export class MarketplaceService {
     listedAt?: Date
   ): Promise<void> {
     try {
-      await pool.query(
-        `INSERT INTO marketplace_listings 
-         (nft_contract, token_id, seller, price, active, listed_at)
-         VALUES ($1, $2, $3, $4, true, $5)
-         ON CONFLICT (nft_contract, token_id) DO UPDATE SET
-           seller = $3,
-           price = $4,
-           active = true,
-           listed_at = $5,
-           updated_at = NOW()`,
-        [nftContract, tokenId, seller, price, listedAt || new Date()]
-      );
+      // Listing the same token again re-activates the one row (UNIQUE nft_contract, token_id) instead of adding a second.
+      const fields = { seller, price, active: true, listedAt: listedAt || new Date() };
+
+      await prisma.marketplaceListing.upsert({
+        where: { nftContract_tokenId: { nftContract, tokenId } },
+        create: { nftContract, tokenId, ...fields },
+        update: fields,
+      });
 
       console.log(`✅ Created listing for NFT ${tokenId} at ${price} ETH`);
     } catch (error) {
@@ -145,13 +124,10 @@ export class MarketplaceService {
     newPrice: string
   ): Promise<void> {
     try {
-      await pool.query(
-        `UPDATE marketplace_listings 
-         SET price = $1, updated_at = NOW() 
-         WHERE LOWER(nft_contract) = LOWER($2) 
-         AND token_id = $3`,
-        [newPrice, nftContract, tokenId]
-      );
+      await prisma.marketplaceListing.updateMany({
+        where: { nftContract: ci(nftContract), tokenId },
+        data: { price: newPrice },
+      });
 
       console.log(`✅ Updated price for NFT ${tokenId} to ${newPrice} ETH`);
     } catch (error) {
@@ -162,13 +138,10 @@ export class MarketplaceService {
 
   async cancelListing(nftContract: string, tokenId: number): Promise<void> {
     try {
-      await pool.query(
-        `UPDATE marketplace_listings 
-         SET active = false, updated_at = NOW() 
-         WHERE LOWER(nft_contract) = LOWER($1) 
-         AND token_id = $2`,
-        [nftContract, tokenId]
-      );
+      await prisma.marketplaceListing.updateMany({
+        where: { nftContract: ci(nftContract), tokenId },
+        data: { active: false },
+      });
 
       console.log(`✅ Cancelled listing for NFT ${tokenId}`);
     } catch (error) {
@@ -189,24 +162,27 @@ export class MarketplaceService {
     soldAt?: Date
   ): Promise<void> {
     try {
-      await pool.query(
-        `INSERT INTO trading_history 
-         (nft_contract, token_id, seller, buyer, price, platform_fee, royalty_fee, transaction_hash, sold_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [
-          nftContract,
-          tokenId,
-          seller,
-          buyer,
-          price,
-          platformFee,
-          royaltyFee,
-          transactionHash,
-          soldAt || new Date(),
-        ]
-      );
-
-      await this.cancelListing(nftContract, tokenId);
+      // One transaction: the sale row and the closed listing land together or not at all. The old code ran them as two
+      // separate statements, so a failure in between left a sold token still listed as active.
+      await prisma.$transaction([
+        prisma.tradingHistory.create({
+          data: {
+            nftContract,
+            tokenId,
+            seller,
+            buyer,
+            price,
+            platformFee,
+            royaltyFee,
+            transactionHash,
+            soldAt: soldAt || new Date(),
+          },
+        }),
+        prisma.marketplaceListing.updateMany({
+          where: { nftContract: ci(nftContract), tokenId },
+          data: { active: false },
+        }),
+      ]);
 
       console.log(`✅ Recorded sale for NFT ${tokenId}: ${seller} → ${buyer} at ${price} ETH`);
     } catch (error) {
@@ -217,14 +193,11 @@ export class MarketplaceService {
 
   async getRecentSales(limit: number = 20): Promise<TradingHistoryRow[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM trading_history 
-         ORDER BY sold_at DESC NULLS LAST, created_at DESC 
-         LIMIT $1`,
-        [limit]
-      );
-
-      return result.rows as TradingHistoryRow[];
+      const sales = await prisma.tradingHistory.findMany({
+        orderBy: [{ soldAt: { sort: 'desc', nulls: 'last' } }, { createdAt: 'desc' }],
+        take: limit,
+      });
+      return sales.map(toHistoryRow);
     } catch (error) {
       console.error('❌ Failed to get recent sales:', error);
       throw new Error('Failed to retrieve recent sales');
@@ -233,14 +206,12 @@ export class MarketplaceService {
 
   async getMostExpensiveSales(limit: number = 10): Promise<TradingHistoryRow[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM trading_history 
-         ORDER BY price DESC 
-         LIMIT $1`,
-        [limit]
-      );
-
-      return result.rows as TradingHistoryRow[];
+      // Sorts the TEXT price column exactly as the old ORDER BY price DESC did (see "Known limits" in the README).
+      const sales = await prisma.tradingHistory.findMany({
+        orderBy: { price: 'desc' },
+        take: limit,
+      });
+      return sales.map(toHistoryRow);
     } catch (error) {
       console.error('❌ Failed to get most expensive sales:', error);
       throw new Error('Failed to retrieve most expensive sales');
@@ -249,13 +220,21 @@ export class MarketplaceService {
 
   async getActivityHistory(limit: number = 50): Promise<any[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM (
+      // Raw on purpose: one feed built from three tables with UNION ALL and json_build_object. Prisma has no UNION, so this
+      // cannot be three findMany calls without pulling every row into Node to merge and sort them there.
+      const rows = await prisma.$queryRaw<Array<{
+        event_type: string;
+        token_id: number;
+        timestamp: number;
+        block_number: number;
+        data: unknown;
+      }>>`
+        SELECT * FROM (
           -- Minted events
           SELECT
             'nftMinted' as event_type,
             token_id,
-            EXTRACT(EPOCH FROM COALESCE(minted_at, created_at)) * 1000 as timestamp,
+            (EXTRACT(EPOCH FROM COALESCE(minted_at, created_at)) * 1000)::float8 as timestamp,
             0 as block_number,
             json_build_object('owner', owner, 'tokenURI', token_uri) as data
           FROM nfts
@@ -266,7 +245,7 @@ export class MarketplaceService {
           SELECT
             'nftListed' as event_type,
             token_id,
-            EXTRACT(EPOCH FROM COALESCE(listed_at, created_at)) * 1000 as timestamp,
+            (EXTRACT(EPOCH FROM COALESCE(listed_at, created_at)) * 1000)::float8 as timestamp,
             0 as block_number,
             json_build_object('seller', seller, 'price', price) as data
           FROM marketplace_listings
@@ -277,17 +256,15 @@ export class MarketplaceService {
           SELECT
             'nftSold' as event_type,
             token_id,
-            EXTRACT(EPOCH FROM COALESCE(sold_at, created_at)) * 1000 as timestamp,
+            (EXTRACT(EPOCH FROM COALESCE(sold_at, created_at)) * 1000)::float8 as timestamp,
             0 as block_number,
             json_build_object('seller', seller, 'buyer', buyer, 'price', price, 'platformFee', platform_fee, 'royaltyFee', royalty_fee) as data
           FROM trading_history
         ) combined
         ORDER BY timestamp DESC
-        LIMIT $1`,
-        [limit]
-      );
+        LIMIT ${limit}`;
 
-      return result.rows.map(row => ({
+      return rows.map(row => ({
         type: row.event_type,
         tokenId: row.token_id,
         timestamp: Math.floor(Number(row.timestamp)),
@@ -305,16 +282,12 @@ export class MarketplaceService {
     maxPrice: string
   ): Promise<MarketplaceListingRow[]> {
     try {
-      const result = await pool.query(
-        `SELECT * FROM marketplace_listings 
-         WHERE active = true 
-         AND price >= $1 
-         AND price <= $2 
-         ORDER BY price ASC`,
-        [minPrice, maxPrice]
-      );
-
-      return result.rows as MarketplaceListingRow[];
+      // String comparison on the TEXT price column, as before (see "Known limits" in the README).
+      const listings = await prisma.marketplaceListing.findMany({
+        where: { active: true, price: { gte: minPrice, lte: maxPrice } },
+        orderBy: { price: 'asc' },
+      });
+      return listings.map(toListingRow);
     } catch (error) {
       console.error('❌ Failed to get listings by price range:', error);
       throw new Error('Failed to retrieve listings by price range');

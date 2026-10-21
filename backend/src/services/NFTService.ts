@@ -1,20 +1,15 @@
-import { pool } from '../config/database.js';
+import { prisma } from '../config/database.js';
+import { Prisma } from '../generated/prisma/client.js';
 import { ipfsService } from './IPFSService.js';
+import { ci } from './prismaHelpers.js';
+import { toNFTRow } from './rowMappers.js';
 import type { NFTRow, NFTMetadata } from '../types/database.js';
 
 export class NFTService {
   async getNFTById(tokenId: number): Promise<NFTRow | null> {
     try {
-      const result = await pool.query(
-        'SELECT * FROM nfts WHERE token_id = $1',
-        [tokenId]
-      );
-
-      if (result.rows.length === 0) {
-        return null;
-      }
-
-      return result.rows[0] as NFTRow;
+      const nft = await prisma.nft.findUnique({ where: { tokenId } });
+      return nft ? toNFTRow(nft) : null;
     } catch (error) {
       console.error(`❌ Failed to get NFT ${tokenId}:`, error);
       throw new Error('Failed to retrieve NFT');
@@ -23,12 +18,11 @@ export class NFTService {
 
   async getNFTsByOwner(owner: string): Promise<NFTRow[]> {
     try {
-      const result = await pool.query(
-        'SELECT * FROM nfts WHERE LOWER(owner) = LOWER($1) ORDER BY token_id DESC',
-        [owner]
-      );
-
-      return result.rows as NFTRow[];
+      const nfts = await prisma.nft.findMany({
+        where: { owner: ci(owner) },
+        orderBy: { tokenId: 'desc' },
+      });
+      return nfts.map(toNFTRow);
     } catch (error) {
       console.error(`❌ Failed to get NFTs for owner ${owner}:`, error);
       throw new Error('Failed to retrieve NFTs by owner');
@@ -38,7 +32,7 @@ export class NFTService {
   async getNFTMetadata(tokenId: number): Promise<NFTMetadata | null> {
     try {
       const nft = await this.getNFTById(tokenId);
-      
+
       if (!nft) {
         return null;
       }
@@ -49,11 +43,11 @@ export class NFTService {
 
       if (nft.ipfs_cid) {
         const metadata = await ipfsService.getMetadata(nft.ipfs_cid);
-        
+
         if (metadata) {
           await this.updateNFTMetadata(tokenId, metadata);
         }
-        
+
         return metadata;
       }
 
@@ -66,8 +60,7 @@ export class NFTService {
 
   async getTotalSupply(): Promise<number> {
     try {
-      const result = await pool.query('SELECT COUNT(*) as count FROM nfts');
-      return parseInt(result.rows[0].count);
+      return await prisma.nft.count();
     } catch (error) {
       console.error('❌ Failed to get total supply:', error);
       throw new Error('Failed to retrieve total supply');
@@ -76,24 +69,25 @@ export class NFTService {
 
   async getRecentlyMinted(limit: number = 20): Promise<NFTRow[]> {
     try {
-      const result = await pool.query(
-        'SELECT * FROM nfts ORDER BY minted_at DESC NULLS LAST, token_id DESC LIMIT $1',
-        [limit]
-      );
-
-      return result.rows as NFTRow[];
+      const nfts = await prisma.nft.findMany({
+        orderBy: [{ mintedAt: { sort: 'desc', nulls: 'last' } }, { tokenId: 'desc' }],
+        take: limit,
+      });
+      return nfts.map(toNFTRow);
     } catch (error) {
       console.error('❌ Failed to get recently minted NFTs:', error);
       throw new Error('Failed to retrieve recently minted NFTs');
     }
   }
 
+  // The three updates below use updateMany on purpose: the old UPDATE statements were a silent no-op for an unknown token
+  // id (an event can arrive for a token the indexer never stored), while Prisma's update() throws P2025 in that case.
   async updateNFTOwner(tokenId: number, newOwner: string): Promise<void> {
     try {
-      await pool.query(
-        'UPDATE nfts SET owner = $1, updated_at = NOW() WHERE token_id = $2',
-        [newOwner, tokenId]
-      );
+      await prisma.nft.updateMany({
+        where: { tokenId },
+        data: { owner: newOwner },
+      });
 
       console.log(`✅ Updated owner for NFT ${tokenId} to ${newOwner}`);
     } catch (error) {
@@ -104,10 +98,10 @@ export class NFTService {
 
   async updateNFTRoyalty(tokenId: number, receiver: string, amount: number): Promise<void> {
     try {
-      await pool.query(
-        'UPDATE nfts SET royalty_receiver = $1, royalty_amount = $2, updated_at = NOW() WHERE token_id = $3',
-        [receiver, amount, tokenId]
-      );
+      await prisma.nft.updateMany({
+        where: { tokenId },
+        data: { royaltyReceiver: receiver, royaltyAmount: amount },
+      });
 
       console.log(`✅ Updated royalty for NFT ${tokenId}: ${receiver} at ${amount / 100}%`);
     } catch (error) {
@@ -118,10 +112,10 @@ export class NFTService {
 
   async updateNFTMetadata(tokenId: number, metadata: NFTMetadata): Promise<void> {
     try {
-      await pool.query(
-        'UPDATE nfts SET metadata = $1, updated_at = NOW() WHERE token_id = $2',
-        [JSON.stringify(metadata), tokenId]
-      );
+      await prisma.nft.updateMany({
+        where: { tokenId },
+        data: { metadata: metadata as unknown as Prisma.InputJsonValue },
+      });
     } catch (error) {
       console.error(`❌ Failed to update metadata for NFT ${tokenId}:`, error);
     }
@@ -138,30 +132,22 @@ export class NFTService {
     mintedAt?: Date
   ): Promise<void> {
     try {
-      await pool.query(
-        `INSERT INTO nfts (
-          token_id, owner, token_uri, ipfs_cid, metadata, 
-          royalty_receiver, royalty_amount, minted_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        ON CONFLICT (token_id) DO UPDATE SET
-          owner = $2,
-          token_uri = $3,
-          ipfs_cid = $4,
-          metadata = $5,
-          royalty_receiver = $6,
-          royalty_amount = $7,
-          updated_at = NOW()`,
-        [
-          tokenId,
-          owner,
-          tokenURI,
-          ipfsCID || null,
-          metadata ? JSON.stringify(metadata) : null,
-          royaltyReceiver || null,
-          royaltyAmount || null,
-          mintedAt || new Date(),
-        ]
-      );
+      // Same fields the old INSERT ... ON CONFLICT (token_id) DO UPDATE overwrote: everything except minted_at, which keeps
+      // the time of the first mint. An empty value is stored as NULL, as before (so royaltyAmount 0 becomes NULL).
+      const fields = {
+        owner,
+        tokenUri: tokenURI,
+        ipfsCid: ipfsCID || null,
+        metadata: metadata ? (metadata as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
+        royaltyReceiver: royaltyReceiver || null,
+        royaltyAmount: royaltyAmount || null,
+      };
+
+      await prisma.nft.upsert({
+        where: { tokenId },
+        create: { tokenId, mintedAt: mintedAt || new Date(), ...fields },
+        update: fields,
+      });
 
       console.log(`✅ Created/Updated NFT ${tokenId} in database`);
     } catch (error) {
@@ -173,17 +159,16 @@ export class NFTService {
   async searchNFTs(query: string, limit: number = 20): Promise<NFTRow[]> {
     try {
       const searchPattern = `%${query}%`;
-      const result = await pool.query(
-        `SELECT * FROM nfts 
-         WHERE token_id::text LIKE $1 
-         OR LOWER(owner) LIKE LOWER($1)
-         OR metadata->>'name' ILIKE $1
-         ORDER BY token_id DESC
-         LIMIT $2`,
-        [searchPattern, limit]
-      );
-
-      return result.rows as NFTRow[];
+      // Raw on purpose: Prisma cannot LIKE-match an Int column (token_id::text) or ILIKE a JSON field's text value
+      // (metadata->>'name') inside one OR. The pattern and the limit are bound parameters, never concatenated.
+      // The columns are already snake_case, so the rows are returned as they come back.
+      return await prisma.$queryRaw<NFTRow[]>(Prisma.sql`
+        SELECT * FROM nfts
+        WHERE token_id::text LIKE ${searchPattern}
+        OR LOWER(owner) LIKE LOWER(${searchPattern})
+        OR metadata->>'name' ILIKE ${searchPattern}
+        ORDER BY token_id DESC
+        LIMIT ${limit}`);
     } catch (error) {
       console.error('❌ Failed to search NFTs:', error);
       throw new Error('Failed to search NFTs');

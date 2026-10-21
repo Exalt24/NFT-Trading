@@ -1,6 +1,6 @@
 import { EventLog, Log, formatEther } from 'ethers';
 import { provider, nftContract, marketplaceContract } from '../config/blockchain.js';
-import { pool } from '../config/database.js';
+import { prisma } from '../config/database.js';
 import { NFTService } from './NFTService.js';
 import { MarketplaceService } from './MarketplaceService.js';
 import { IPFSService } from './IPFSService.js';
@@ -525,20 +525,13 @@ export class EventIndexer {
   private async getLastSyncedBlock(): Promise<number> {
     try {
       const nftAddress = await nftContract.getAddress();
-      const result = await pool.query(
-        'SELECT last_synced_block FROM sync_status WHERE contract_address = $1',
-        [nftAddress.toLowerCase()]
-      );
-
-      if (result.rows.length > 0) {
-        return result.rows[0].last_synced_block;
-      }
-
-      await pool.query(
-        'INSERT INTO sync_status (contract_address, last_synced_block) VALUES ($1, $2)',
-        [nftAddress.toLowerCase(), 0]
-      );
-      return 0;
+      // One statement: read the row, or create it at block 0 on the first run. An empty update keeps an existing row untouched.
+      const status = await prisma.syncStatus.upsert({
+        where: { contractAddress: nftAddress.toLowerCase() },
+        create: { contractAddress: nftAddress.toLowerCase(), lastSyncedBlock: 0 },
+        update: {},
+      });
+      return status.lastSyncedBlock;
     } catch (error) {
       console.error('❌ Error getting last synced block:', error);
       return 0;
@@ -552,10 +545,10 @@ export class EventIndexer {
       }
 
       const nftAddress = await nftContract.getAddress();
-      await pool.query(
-        'UPDATE sync_status SET last_synced_block = $1, updated_at = NOW() WHERE contract_address = $2',
-        [blockNumber, nftAddress.toLowerCase()]
-      );
+      await prisma.syncStatus.updateMany({
+        where: { contractAddress: nftAddress.toLowerCase() },
+        data: { lastSyncedBlock: blockNumber },
+      });
     } catch (error) {
       console.error('❌ Error updating last synced block:', error);
     }
