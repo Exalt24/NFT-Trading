@@ -28,10 +28,12 @@ ERC-721 NFT marketplace with batch minting, royalties and a PostgreSQL event ind
 - 62 passing Hardhat tests: 27 for GameNFT and 35 for Marketplace
 
 ### Backend (`backend/`)
-- An event indexer that reads contract events into PostgreSQL
+- An event indexer that reads contract events into PostgreSQL, with every chain read retried with backoff so one dropped RPC request does not skip a block range
+- Analytics responses cached in memory for 15 seconds and cleared whenever the indexer processes new events; a burst of identical requests shares one database query
 - 25 REST endpoints under `/api` (6 NFT, 10 marketplace, 9 analytics) plus `/health`
 - A Socket.IO server with room-based broadcasting
 - 5 PostgreSQL tables and 10 indexes (`backend/migrations/001_nft_tables.sql`)
+- 14 backend unit tests (the cache and the retry helper), a TypeScript typecheck and a build, all run in CI
 
 ## Quick start
 
@@ -120,10 +122,13 @@ NFT-Trading/
 │   └── test/               # GameNFT.test.ts, Marketplace.test.ts
 ├── backend/
 │   ├── src/
-│   │   ├── services/       # Event indexer, NFT, marketplace, analytics, IPFS
+│   │   ├── services/       # Event indexer, NFT, marketplace, analytics, IPFS, cache
 │   │   ├── api/            # REST routes
 │   │   ├── websocket/      # Socket.IO server and rooms
+│   │   ├── utils/          # retry with backoff
+│   │   ├── types/          # row, event and metadata types
 │   │   └── config/         # Database, blockchain, IPFS, env
+│   ├── tests/unit/         # cache.test.ts, retry.test.ts
 │   └── migrations/         # PostgreSQL schema
 ├── marketplace-frontend/   # Marketplace UI (React, Vite)
 ├── creator-dashboard/      # Creator UI (React, Vite)
@@ -147,6 +152,18 @@ NFT-Trading/
 | Container | Docker |
 
 ## Testing
+
+### Backend unit tests and typecheck
+
+```powershell
+cd backend
+npm install
+npm test            # 14 tests: the TTL cache (expiry, shared computation, failures are not cached) and the retry helper
+npm run typecheck   # tsc --noEmit
+npm run build
+```
+
+These need no database or chain. The indexer and the REST routes are covered by the integration scripts below, which need the Docker stack.
 
 ### Contract tests
 
@@ -227,6 +244,9 @@ What it does not do:
 - [docs/PRODUCTION.md](docs/PRODUCTION.md): notes on what a public deployment would need; I have not followed it
 
 ## Not done
+
+- The cache is in memory in one process, so it would need a shared store if the backend ran as several instances
+- A block range whose chain reads still fail after three attempts is logged and skipped, not replayed
 
 - No public deployment, testnet or mainnet
 - No rate limiting

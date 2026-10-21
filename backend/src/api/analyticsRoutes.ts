@@ -1,11 +1,15 @@
 import { Router } from 'express';
 import { analyticsService } from '../services/AnalyticsService.js';
+import { cacheService } from '../services/CacheService.js';
+
+// Analytics reads are aggregate queries over every sale, so each response is cached briefly; the indexer clears the cache when it processes new events.
+const ANALYTICS_TTL_S = 15;
 
 export const analyticsRoutes = Router();
 
 analyticsRoutes.get('/analytics/stats', async (req, res) => {
   try {
-    const stats = await analyticsService.getPlatformStats();
+    const stats = await cacheService.cached('analytics:stats', ANALYTICS_TTL_S, () => analyticsService.getPlatformStats());
     res.json(stats);
   } catch (error) {
     console.error('Error getting platform stats:', error);
@@ -21,7 +25,7 @@ analyticsRoutes.get('/analytics/top-traders', async (req, res) => {
       return res.status(400).json({ error: 'Limit must be between 1 and 50' });
     }
 
-    const traders = await analyticsService.getTopTraders(limit);
+    const traders = await cacheService.cached(`analytics:top-traders:${limit}`, ANALYTICS_TTL_S, () => analyticsService.getTopTraders(limit));
     res.json(traders);
   } catch (error) {
     console.error('Error getting top traders:', error);
@@ -37,7 +41,7 @@ analyticsRoutes.get('/analytics/volume', async (req, res) => {
       return res.status(400).json({ error: 'Days must be between 1 and 365' });
     }
 
-    const volumeData = await analyticsService.getTradingVolumeOverTime(days);
+    const volumeData = await cacheService.cached(`analytics:volume:${days}`, ANALYTICS_TTL_S, () => analyticsService.getTradingVolumeOverTime(days));
     res.json(volumeData);
   } catch (error) {
     console.error('Error getting volume over time:', error);
@@ -53,7 +57,7 @@ analyticsRoutes.get('/analytics/expensive-sales', async (req, res) => {
       return res.status(400).json({ error: 'Limit must be between 1 and 50' });
     }
 
-    const sales = await analyticsService.getMostExpensiveSales(limit);
+    const sales = await cacheService.cached(`analytics:expensive-sales:${limit}`, ANALYTICS_TTL_S, () => analyticsService.getMostExpensiveSales(limit));
     res.json(sales);
   } catch (error) {
     console.error('Error getting expensive sales:', error);
@@ -63,7 +67,7 @@ analyticsRoutes.get('/analytics/expensive-sales', async (req, res) => {
 
 analyticsRoutes.get('/analytics/price-distribution', async (req, res) => {
   try {
-    const distribution = await analyticsService.getPriceDistribution();
+    const distribution = await cacheService.cached('analytics:price-distribution', ANALYTICS_TTL_S, () => analyticsService.getPriceDistribution());
     res.json(distribution);
   } catch (error) {
     console.error('Error getting price distribution:', error);
@@ -79,7 +83,7 @@ analyticsRoutes.get('/analytics/volume-by-nft', async (req, res) => {
       return res.status(400).json({ error: 'Limit must be between 1 and 50' });
     }
 
-    const volumeByNFT = await analyticsService.getVolumeByNFT(limit);
+    const volumeByNFT = await cacheService.cached(`analytics:volume-by-nft:${limit}`, ANALYTICS_TTL_S, () => analyticsService.getVolumeByNFT(limit));
     res.json(volumeByNFT);
   } catch (error) {
     console.error('Error getting volume by NFT:', error);
@@ -89,7 +93,7 @@ analyticsRoutes.get('/analytics/volume-by-nft', async (req, res) => {
 
 analyticsRoutes.get('/analytics/sales-by-hour', async (req, res) => {
   try {
-    const salesByHour = await analyticsService.getSalesByTimeOfDay();
+    const salesByHour = await cacheService.cached('analytics:sales-by-hour', ANALYTICS_TTL_S, () => analyticsService.getSalesByTimeOfDay());
     res.json(salesByHour);
   } catch (error) {
     console.error('Error getting sales by hour:', error);
@@ -105,7 +109,7 @@ analyticsRoutes.get('/analytics/user/:address', async (req, res) => {
       return res.status(400).json({ error: 'Invalid Ethereum address' });
     }
 
-    const userStats = await analyticsService.getUserStats(address);
+    const userStats = await cacheService.cached(`analytics:user:${address.toLowerCase()}`, ANALYTICS_TTL_S, () => analyticsService.getUserStats(address));
     res.json(userStats);
   } catch (error) {
     console.error('Error getting user stats:', error);
@@ -121,7 +125,7 @@ analyticsRoutes.get('/analytics/creator/:address', async (req, res) => {
       return res.status(400).json({ error: 'Invalid Ethereum address' });
     }
 
-    const creatorStats = await analyticsService.getCreatorStats(address);
+    const creatorStats = await cacheService.cached(`analytics:creator:${address.toLowerCase()}`, ANALYTICS_TTL_S, () => analyticsService.getCreatorStats(address));
     res.json(creatorStats);
   } catch (error) {
     console.error('Error getting creator stats:', error);

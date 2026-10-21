@@ -25,7 +25,7 @@ Thumbs.db
 # Blockchain artifacts
 cache/
 artifacts/
-types/
+contracts/types/
 ignition/deployments/
 
 # Testing

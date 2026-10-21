@@ -5,10 +5,19 @@ import { NFTService } from './NFTService.js';
 import { MarketplaceService } from './MarketplaceService.js';
 import { IPFSService } from './IPFSService.js';
 import type { WebSocketServer } from '../websocket/server.js';
+import { retry } from '../utils/retry.js';
+import { cacheService } from './CacheService.js';
 
 const nftService = new NFTService();
 const marketplaceService = new MarketplaceService();
 const ipfsService = new IPFSService();
+
+// One dropped RPC request must not skip a block range, so chain reads are retried with backoff before the error is allowed to surface.
+const RPC_RETRY = {
+  maxAttempts: 3,
+  delayMs: 500,
+  onRetry: (attempt: number, error: Error) => console.warn(`⚠️  RPC call failed (attempt ${attempt}), retrying: ${error.message}`),
+};
 
 export class EventIndexer {
   private isRunning = false;
@@ -34,7 +43,7 @@ export class EventIndexer {
     this.reconnectAttempts = 0;
 
     try {
-      const currentBlock = await provider.getBlockNumber();
+      const currentBlock = await retry(() => provider.getBlockNumber(), RPC_RETRY);
       console.log(`📦 Current block: ${currentBlock}`);
 
       const lastSyncedBlock = await this.getLastSyncedBlock();
@@ -83,7 +92,7 @@ export class EventIndexer {
       }
 
       try {
-        const currentBlock = await provider.getBlockNumber();
+        const currentBlock = await retry(() => provider.getBlockNumber(), RPC_RETRY);
 
         if (currentBlock > this.lastProcessedBlock) {
           this.isProcessing = true;
@@ -118,7 +127,7 @@ export class EventIndexer {
     await new Promise(resolve => setTimeout(resolve, this.reconnectDelay));
 
     try {
-      const currentBlock = await provider.getBlockNumber();
+      const currentBlock = await retry(() => provider.getBlockNumber(), RPC_RETRY);
       console.log('✅ Reconnected successfully');
       this.reconnectAttempts = 0;
       this.lastProcessedBlock = currentBlock;
@@ -155,7 +164,7 @@ export class EventIndexer {
           soldEvents,
           cancelledEvents,
           priceUpdatedEvents
-        ] = await Promise.all([
+        ] = await retry(() => Promise.all([
           nftContract.queryFilter(nftMintedFilter, start, end),
           nftContract.queryFilter(nftTransferFilter, start, end),
           nftContract.queryFilter(defaultRoyaltyFilter, start, end),
@@ -164,7 +173,7 @@ export class EventIndexer {
           marketplaceContract.queryFilter(soldFilter, start, end),
           marketplaceContract.queryFilter(cancelledFilter, start, end),
           marketplaceContract.queryFilter(priceUpdatedFilter, start, end),
-        ]);
+        ]), RPC_RETRY);
 
         // Process events in order by block number and log index
         const allEvents = [
@@ -226,6 +235,7 @@ export class EventIndexer {
         }
 
         if (allEvents.length > 0) {
+          cacheService.clear();   // new chain events change every analytics figure, so nothing cached before them may be served
           console.log(`✅ Processed ${allEvents.length} events (blocks ${start}-${end})`);
         }
       } catch (error) {
