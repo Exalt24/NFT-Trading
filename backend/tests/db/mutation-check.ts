@@ -66,6 +66,42 @@ const mutations: Mutation[] = [
     find: 'String    @unique @map("contract_address")',
     replace: 'String    @map("contract_address")',
   },
+  {
+    name: 'floor price orders the TEXT price instead of the number',
+    file: 'src/services/MarketplaceService.ts',
+    find: 'ORDER BY CAST(price AS numeric) ASC\n        LIMIT 1',
+    replace: 'ORDER BY price ASC\n        LIMIT 1',
+  },
+  {
+    name: 'price range filter compares the TEXT price instead of the number',
+    file: 'src/services/MarketplaceService.ts',
+    find: 'AND CAST(price AS numeric) >= CAST(${minPrice} AS numeric)\n          AND CAST(price AS numeric) <= CAST(${maxPrice} AS numeric)',
+    replace: 'AND price >= ${minPrice}\n          AND price <= ${maxPrice}',
+  },
+  {
+    name: 'price range results are ordered by the TEXT price',
+    file: 'src/services/MarketplaceService.ts',
+    find: 'ORDER BY CAST(price AS numeric) ASC, id ASC',
+    replace: 'ORDER BY price ASC, id ASC',
+  },
+  {
+    name: 'marketplace most expensive sales ordered by the TEXT price',
+    file: 'src/services/MarketplaceService.ts',
+    find: 'ORDER BY CAST(price AS numeric) DESC, id ASC',
+    replace: 'ORDER BY price DESC, id ASC',
+  },
+  {
+    name: 'price distribution edges left in ETH instead of converted to wei',
+    file: 'src/services/AnalyticsService.ts',
+    find: '[WEI_PER_ETH / 10n, WEI_PER_ETH / 2n, WEI_PER_ETH, 5n * WEI_PER_ETH, 10n * WEI_PER_ETH].map(String)',
+    replace: "['0.1', '0.5', '1', '5', '10']",
+  },
+  {
+    name: 'price distribution buckets the TEXT price (the numeric cast is removed)',
+    file: 'src/services/AnalyticsService.ts',
+    find: 'SELECT CAST(price AS numeric) AS wei',
+    replace: 'SELECT price AS wei',
+  },
 ];
 
 function runTests(): { ok: boolean; failed: string[]; summary: string } {
