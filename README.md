@@ -142,7 +142,7 @@ npm run test:db                           # 74 tests on a rebuilt _test database
 npm run test:db:mutation                  # breaks 15 guards one at a time, expects red each time
 ```
 
-On 2026-10-22, before the port: typecheck clean, 14 unit tests passed. After: typecheck clean, the same 14 plus 74 database tests pass (74 in 5.5 seconds), 15 of 15 mutations are caught, and CI runs all of them against a Postgres service. Each database test file opens with positive controls. On 2026-10-22 the floor price, price range filter, marketplace most expensive sales and price distribution moved to numeric comparison, so 10 ETH no longer sorts below 9 ETH. Known limits are in [docs/DATA_LAYER.md](docs/DATA_LAYER.md).
+On 2026-10-22, after the port: typecheck clean, 18 unit tests and 74 database tests pass (74 in 5.5 seconds), 15 of 15 mutations are caught, and CI runs them against a Postgres service. Each database test file opens with positive controls. On 2026-10-22 the floor price, price range filter, marketplace most expensive sales and price distribution moved to numeric comparison, so 10 ETH no longer sorts below 9 ETH. Known limits are in [docs/DATA_LAYER.md](docs/DATA_LAYER.md).
 
 ## Testing
 
