@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { marketplaceService } from '../services/MarketplaceService.js';
+import { priceRangeError } from './priceRange.js';
 
 export const marketplaceRoutes = Router();
 
@@ -151,20 +152,9 @@ marketplaceRoutes.get('/marketplace/price-range', async (req, res) => {
     const minPrice = req.query.min as string;
     const maxPrice = req.query.max as string;
 
-    if (!minPrice || !maxPrice) {
-      return res.status(400).json({ error: 'Both min and max price are required' });
-    }
-
-    if (isNaN(parseFloat(minPrice)) || isNaN(parseFloat(maxPrice))) {
-      return res.status(400).json({ error: 'Invalid price values' });
-    }
-
-    if (parseFloat(minPrice) < 0 || parseFloat(maxPrice) < 0) {
-      return res.status(400).json({ error: 'Prices must be positive' });
-    }
-
-    if (parseFloat(minPrice) > parseFloat(maxPrice)) {
-      return res.status(400).json({ error: 'Min price cannot be greater than max price' });
+    const invalid = priceRangeError(minPrice, maxPrice);
+    if (invalid) {
+      return res.status(400).json({ error: invalid });
     }
 
     const listings = await marketplaceService.getListingsByPriceRange(minPrice, maxPrice);

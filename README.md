@@ -33,7 +33,7 @@ ERC-721 NFT marketplace with batch minting, royalties and a PostgreSQL event ind
 - 25 REST endpoints under `/api` (6 NFT, 10 marketplace, 9 analytics) plus `/health`
 - A Socket.IO server with room-based broadcasting
 - 5 PostgreSQL tables and 10 indexes (`backend/migrations/001_nft_tables.sql`), read and written through Prisma 7 (see [Data layer](#data-layer))
-- 14 backend unit tests (the cache and the retry helper) and 74 database tests against a real PostgreSQL, a TypeScript typecheck and a build, all run in CI
+- 18 backend unit tests (the cache, the retry helper and the price range check) and 74 database tests against a real PostgreSQL, a TypeScript typecheck and a build, all run in CI
 
 ## Quick start
 
@@ -137,7 +137,7 @@ $env:DATABASE_URL = "postgresql://postgres:postgres@localhost:55432/nft_marketpl
 npm run migrate                           # apply the SQL migration
 npm run db:generate                       # build the Prisma Client
 npm run db:drift                          # schema file against the database
-npm test                                  # 14 unit tests, no database needed
+npm test                                  # 18 unit tests, no database needed
 npm run test:db                           # 74 tests on a rebuilt _test database
 npm run test:db:mutation                  # breaks 15 guards one at a time, expects red each time
 ```
@@ -151,7 +151,7 @@ On 2026-10-22, before the port: typecheck clean, 14 unit tests passed. After: ty
 ```powershell
 cd backend
 npm install
-npm test            # 14 tests: the TTL cache (expiry, shared computation, failures are not cached) and the retry helper
+npm test            # 18 tests: the TTL cache (expiry, shared computation, failures are not cached), the retry helper and the price range check
 npm run typecheck   # tsc --noEmit
 npm run build
 ```
