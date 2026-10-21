@@ -47,11 +47,15 @@ export class MarketplaceService {
 
   async getFloorPrice(): Promise<string> {
     try {
-      const floor = await prisma.marketplaceListing.aggregate({
-        where: { active: true },
-        _min: { price: true },
-      });
-      return floor._min.price ?? '0';
+      // Raw on purpose: price is a TEXT wei string, so MIN() and orderBy would compare it as text and pick 10 ETH over 9 ETH.
+      // This orders by CAST(price AS numeric) and returns the stored text of the cheapest row unchanged.
+      const rows = await prisma.$queryRaw<Array<{ price: string }>>`
+        SELECT price
+        FROM marketplace_listings
+        WHERE active = true
+        ORDER BY CAST(price AS numeric) ASC
+        LIMIT 1`;
+      return rows[0]?.price ?? '0';
     } catch (error) {
       console.error('❌ Failed to get floor price:', error);
       throw new Error('Failed to retrieve floor price');
@@ -210,12 +214,16 @@ export class MarketplaceService {
 
   async getMostExpensiveSales(limit: number = 10): Promise<TradingHistoryRow[]> {
     try {
-      // Sorts the TEXT price column exactly as the old ORDER BY price DESC did (see "Known limits" in the README).
-      const sales = await prisma.tradingHistory.findMany({
-        orderBy: { price: 'desc' },
-        take: limit,
-      });
-      return sales.map(toHistoryRow);
+      // The order is a numeric one: price is a TEXT wei string, which orderBy would sort as text (9 ETH above 10 ETH). A raw query
+      // picks the ids by CAST(price AS numeric), then Prisma loads the rows and they are put back in that order.
+      const ranked = await prisma.$queryRaw<Array<{ id: number }>>`
+        SELECT id
+        FROM trading_history
+        ORDER BY CAST(price AS numeric) DESC, id ASC
+        LIMIT ${limit}`;
+      const sales = await prisma.tradingHistory.findMany({ where: { id: { in: ranked.map(r => r.id) } } });
+      const byId = new Map(sales.map(sale => [sale.id, sale]));
+      return ranked.map(r => toHistoryRow(byId.get(r.id)!));
     } catch (error) {
       console.error('❌ Failed to get most expensive sales:', error);
       throw new Error('Failed to retrieve most expensive sales');
@@ -286,12 +294,19 @@ export class MarketplaceService {
     maxPrice: string
   ): Promise<MarketplaceListingRow[]> {
     try {
-      // String comparison on the TEXT price column, as before (see "Known limits" in the README).
-      const listings = await prisma.marketplaceListing.findMany({
-        where: { active: true, price: { gte: minPrice, lte: maxPrice } },
-        orderBy: { price: 'asc' },
-      });
-      return listings.map(toListingRow);
+      // Numeric, not text: price is a TEXT wei string, so a text comparison let 0.5 ETH and 10 ETH into a 1 to 9.5 ETH range.
+      // Both bounds are bound parameters cast to numeric in SQL (a decimal point or an exponent is fine, anything else is an error).
+      // A raw query picks the ids in price order, then Prisma loads the rows and they are put back in that order.
+      const ranked = await prisma.$queryRaw<Array<{ id: number }>>`
+        SELECT id
+        FROM marketplace_listings
+        WHERE active = true
+          AND CAST(price AS numeric) >= CAST(${minPrice} AS numeric)
+          AND CAST(price AS numeric) <= CAST(${maxPrice} AS numeric)
+        ORDER BY CAST(price AS numeric) ASC, id ASC`;
+      const listings = await prisma.marketplaceListing.findMany({ where: { id: { in: ranked.map(r => r.id) } } });
+      const byId = new Map(listings.map(listing => [listing.id, listing]));
+      return ranked.map(r => toListingRow(byId.get(r.id)!));
     } catch (error) {
       console.error('❌ Failed to get listings by price range:', error);
       throw new Error('Failed to retrieve listings by price range');

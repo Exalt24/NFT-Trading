@@ -135,8 +135,8 @@ test('getTradingVolumeOverTime treats the day count as a value: injected SQL tex
 
 test('getPriceDistribution groups active listings into the six price ranges, lowest range first', async () => {
   await prisma.marketplaceListing.createMany({
-    data: ['0.05', '0.3', '0.7', '2', '7', '12'].map((price, i) => ({ nftContract: CONTRACT, tokenId: i + 1, seller: ALICE, price })).concat(
-      [{ nftContract: CONTRACT, tokenId: 99, seller: ALICE, price: '0.01' }],
+    data: [0.05, 0.3, 0.7, 2, 7, 12].map((price, i) => ({ nftContract: CONTRACT, tokenId: i + 1, seller: ALICE, price: eth(price) })).concat(
+      [{ nftContract: CONTRACT, tokenId: 99, seller: ALICE, price: eth(0.01) }],
     ).map((l, i) => (i === 6 ? { ...l, active: false } : l)),
   });
   assert.deepEqual(await analyticsService.getPriceDistribution(), [

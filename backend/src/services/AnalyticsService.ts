@@ -9,6 +9,10 @@ import type { PlatformStats, Trader, VolumeData, Sale } from '../types/database.
 // Every raw statement uses bound parameters through the tagged template, never string concatenation.
 // COPY-OK: the template literals in this file are SQL statements, not screen text.
 
+// The price distribution's range edges in ETH (0.1, 0.5, 1, 5, 10), converted to wei (10^18 per ETH) as exact integer strings.
+const WEI_PER_ETH = 10n ** 18n;
+const PRICE_BOUNDS_WEI = [WEI_PER_ETH / 10n, WEI_PER_ETH / 2n, WEI_PER_ETH, 5n * WEI_PER_ETH, 10n * WEI_PER_ETH].map(String);
+
 export class AnalyticsService {
   async getPlatformStats(): Promise<PlatformStats> {
     try {
@@ -149,24 +153,28 @@ export class AnalyticsService {
 
   async getPriceDistribution(): Promise<Array<{ range: string; count: number }>> {
     try {
+      // The stored price is wei (a TEXT column), and the range labels are ETH, so the five thresholds are converted to wei here
+      // and bound as parameters. Comparing wei against 0.1, 0.5 and so on put every indexed price in the top range.
       // A CASE bucket plus GROUP BY on the bucket: not expressible in Prisma Client.
       // COPY-OK: SQL statement, not screen text
       const rows = await prisma.$queryRaw<Array<{ range: string; count: number }>>`
         SELECT
           CASE
-            WHEN CAST(price AS numeric) < 0.1 THEN '0.00 - 0.09'
-            WHEN CAST(price AS numeric) >= 0.1 AND CAST(price AS numeric) < 0.5 THEN '0.10 - 0.49'
-            WHEN CAST(price AS numeric) >= 0.5 AND CAST(price AS numeric) < 1.0 THEN '0.50 - 0.99'
-            WHEN CAST(price AS numeric) >= 1.0 AND CAST(price AS numeric) < 5.0 THEN '1.00 - 4.99'
-            WHEN CAST(price AS numeric) >= 5.0 AND CAST(price AS numeric) < 10.0 THEN '5.00 - 9.99'
+            WHEN wei < CAST(${PRICE_BOUNDS_WEI[0]} AS numeric) THEN '0.00 - 0.09'
+            WHEN wei < CAST(${PRICE_BOUNDS_WEI[1]} AS numeric) THEN '0.10 - 0.49'
+            WHEN wei < CAST(${PRICE_BOUNDS_WEI[2]} AS numeric) THEN '0.50 - 0.99'
+            WHEN wei < CAST(${PRICE_BOUNDS_WEI[3]} AS numeric) THEN '1.00 - 4.99'
+            WHEN wei < CAST(${PRICE_BOUNDS_WEI[4]} AS numeric) THEN '5.00 - 9.99'
             ELSE '10.00+'
           END AS range,
           COUNT(*)::integer AS count
-        FROM marketplace_listings
-        WHERE active = true
+        FROM (
+          SELECT CAST(price AS numeric) AS wei
+          FROM marketplace_listings
+          WHERE active = true
+        ) AS active_prices
         GROUP BY range
-        ORDER BY
-          MIN(CAST(price AS numeric))`;
+        ORDER BY MIN(wei)`;
 
       return rows.map(row => ({
         range: row.range,
