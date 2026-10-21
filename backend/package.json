@@ -4,11 +4,16 @@
   "description": "Backend event indexer and API for NFT marketplace",
   "type": "module",
   "scripts": {
+    "predev": "prisma generate",
     "dev": "tsx watch src/index.ts",
+    "prebuild": "prisma generate",
     "build": "tsc",
     "start": "node dist/index.js",
     "migrate": "tsx migrations/run.ts",
+    "db:generate": "prisma generate",
+    "db:drift": "prisma migrate diff --from-config-datasource --to-schema prisma/schema.prisma --exit-code",
     "test": "npm run test:unit",
+    "test:all": "npm run test:unit && npm run test:db",
     "test:ipfs": "tsx tests/test-ipfs.ts",
     "test:services": "tsx tests/test-services.ts",
     "test:analytics": "tsx tests/test-analytics.ts",
@@ -16,6 +21,10 @@
     "test:indexer": "tsx tests/test-indexer.ts",
     "test:websocket": "tsx tests/test-websocket.ts",
     "test:unit": "tsx --test tests/unit/*.test.ts",
+    "pretest:db": "tsx tests/db/prepare.ts",
+    "test:db": "tsx --test --test-concurrency=1 tests/db/*.test.ts",
+    "test:db:mutation": "tsx tests/db/mutation-check.ts",
+    "pretypecheck": "prisma generate",
     "typecheck": "tsc --noEmit"
   },
   "keywords": [
@@ -29,6 +38,8 @@
   "dependencies": {
     "express": "^5.1.0",
     "pg": "^8.13.1",
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "socket.io": "^4.8.1",
     "ethers": "^6.15.0",
     "pinata-web3": "^0.5.0",
@@ -37,6 +48,7 @@
   },
   "devDependencies": {
     "typescript": "^5.9.0",
+    "prisma": "^7.10.1",
     "@types/node": "^22.10.2",
     "@types/express": "^5.0.0",
     "@types/pg": "^8.15.5",

@@ -110,7 +110,7 @@ Write-Host "  Creator Dashboard:  http://localhost:3003" -ForegroundColor White
 Write-Host "  Backend API:        http://localhost:4001/api" -ForegroundColor White
 Write-Host "  Health Check:       http://localhost:4001/health" -ForegroundColor White
 Write-Host "  Hardhat RPC:        http://localhost:8546" -ForegroundColor White
-Write-Host "  PostgreSQL:         localhost:5433" -ForegroundColor White
+Write-Host "  PostgreSQL:         localhost:55432" -ForegroundColor White
 Write-Host ""
 Write-Host "View Logs:" -ForegroundColor Cyan
 Write-Host "  All services:       .\scripts\docker-logs.ps1" -ForegroundColor White

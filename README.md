@@ -54,7 +54,7 @@ The script builds the images, starts PostgreSQL and a Hardhat node, deploys the 
 | Backend API | http://localhost:4001/api |
 | Health check | http://localhost:4001/health |
 | Hardhat RPC | http://localhost:8546 |
-| PostgreSQL | localhost:5433 |
+| PostgreSQL | localhost:55432 |
 
 The ports differ from the usual defaults (3000, 3001, 4000, 5432, 8545) so the stack does not collide with other projects. Inside Docker the standard ports are used.
 

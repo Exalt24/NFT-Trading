@@ -43,11 +43,7 @@ services:
     container_name: nft-marketplace-backend
     environment:
       - PORT=4000
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=nft_marketplace
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/nft_marketplace
       - RPC_URL=http://hardhat:8545
       - NFT_CONTRACT_ADDRESS=${NFT_CONTRACT_ADDRESS:-}
       - MARKETPLACE_CONTRACT_ADDRESS=${MARKETPLACE_CONTRACT_ADDRESS:-}
