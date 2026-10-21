@@ -4,7 +4,7 @@
 
 ![Marketplace demo: connect a wallet, buy an NFT, resell it, then the live feed and analytics, on a local Hardhat chain](docs/demo.gif)
 
-*The real marketplace UI on a local Hardhat chain, driven through a scripted stand-in for MetaMask: connect, buy, resell, live activity feed, analytics. Silent, 37 seconds. [Full quality mp4](docs/demo.mp4). How it was recorded is [below](#how-the-demo-was-recorded).*
+*The real marketplace UI on a local Hardhat chain, driven through a scripted stand-in for MetaMask: connect, buy, resell, live activity feed, analytics. Silent, 37 seconds. [Full quality mp4](docs/demo.mp4). How it was recorded is in [docs/DEMO_RECORDING.md](docs/DEMO_RECORDING.md).*
 
 ERC-721 NFT marketplace with batch minting, royalties and a PostgreSQL event indexer, on a local Hardhat chain. Creators mint single or batch NFTs with IPFS metadata, list them on a marketplace contract that pays royalties and a platform fee, and a PostgreSQL event indexer feeds a REST API and a Socket.IO feed that both frontends read. It is a demonstration project. It has never been deployed to a public network and its own security notes say a professional audit is required before any real use.
 
@@ -32,8 +32,8 @@ ERC-721 NFT marketplace with batch minting, royalties and a PostgreSQL event ind
 - Analytics responses cached in memory for 15 seconds and cleared whenever the indexer processes new events; a burst of identical requests shares one database query
 - 25 REST endpoints under `/api` (6 NFT, 10 marketplace, 9 analytics) plus `/health`
 - A Socket.IO server with room-based broadcasting
-- 5 PostgreSQL tables and 10 indexes (`backend/migrations/001_nft_tables.sql`)
-- 14 backend unit tests (the cache and the retry helper), a TypeScript typecheck and a build, all run in CI
+- 5 PostgreSQL tables and 10 indexes (`backend/migrations/001_nft_tables.sql`), read and written through Prisma 7 (see [Data layer](#data-layer))
+- 14 backend unit tests (the cache and the retry helper) and 63 database tests against a real PostgreSQL, a TypeScript typecheck and a build, all run in CI
 
 ## Quick start
 
@@ -76,42 +76,7 @@ The full stack is supported through Docker only. Running the four services by ha
 
 ## Using it
 
-### Connect MetaMask
-
-Add the Hardhat network:
-- Network name: Hardhat Local
-- RPC URL: `http://localhost:8546`
-- Chain ID: `31337`
-- Currency symbol: ETH
-
-Import test account #0 from the Hardhat node logs:
-
-```
-Account #0: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 (Owner)
-Private Key: 0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80
-```
-
-This is the public Hardhat default test account. It ships with every Hardhat node and only holds funds on your local chain. Never use it on a public network.
-
-### Buy, list, mint
-
-After seeding:
-
-1. Open the marketplace at http://localhost:3002 and press "Connect Wallet". Use a second MetaMask account (for example Hardhat account #1) to buy.
-2. Open a listing and press "Buy Now for ... ETH", then "Confirm". The page confirms with "Purchase successful! The NFT is now yours." and the NFT appears under "My NFTs".
-3. In "My NFTs" press "List" on an NFT you own. The first time, "Approve & List" approves the marketplace contract, then "List NFT" sets the price. "Update" and "Cancel" appear on listed NFTs.
-4. The "Activity" tab is the live feed and the "Analytics" tab shows platform statistics, the volume chart, the price distribution, top traders and the most expensive sales.
-5. Minting happens in the creator dashboard at http://localhost:3003 and needs Pinata: upload an image, fill in the metadata, upload to IPFS, then mint and confirm in MetaMask. That path is not covered by the demo clip.
-
-## How the demo was recorded
-
-The clip at the top is the real marketplace frontend, backend, indexer and contracts running in the Docker stack above on a local Hardhat chain. Nothing in it is mocked on the server side. Three things make it a recording and not a manual session:
-
-- **No MetaMask.** The browser was headless Chromium driven by a Playwright script, which has no wallet extension. [`scripts/demo/wallet-stub.js`](scripts/demo/wallet-stub.js) is a small stand-in for `window.ethereum` that answers account, connect and chain-switch requests itself and forwards everything else, including `eth_sendTransaction`, to the local Hardhat node, which signs for its unlocked test account #1. It holds no keys. It is a recording aid, not part of the app. The Playwright driver script itself is not in this repo.
-- **Seeded data.** The marketplace was filled with `scripts/seed-demo.ts` as described above: 13 NFTs, 8 listed, 3 already sold, art embedded as `data:` URIs, no Pinata.
-- **Captions.** The captions were burned in afterwards with ffmpeg, and the GIF was made from that video.
-
-What it does not show: minting and IPFS upload, the real MetaMask confirmation popups, the creator dashboard, and any deployed network. There is none.
+MetaMask setup and the buy, list and mint steps are in [docs/USING.md](docs/USING.md).
 
 ## Project structure
 
@@ -128,8 +93,10 @@ NFT-Trading/
 │   │   ├── utils/          # retry with backoff
 │   │   ├── types/          # row, event and metadata types
 │   │   └── config/         # Database, blockchain, IPFS, env
+│   ├── prisma/             # schema.prisma
 │   ├── tests/unit/         # cache.test.ts, retry.test.ts
-│   └── migrations/         # PostgreSQL schema
+│   ├── tests/db/           # Prisma tests on a real PostgreSQL, mutation-check.ts
+│   └── migrations/         # PostgreSQL schema and its runner
 ├── marketplace-frontend/   # Marketplace UI (React, Vite)
 ├── creator-dashboard/      # Creator UI (React, Vite)
 ├── tests/
@@ -137,7 +104,7 @@ NFT-Trading/
 │   └── e2e/                # full-stack.test.ts
 ├── scripts/                # Docker helpers, deployment, seeding, stack verification
 │   └── demo/               # wallet-stub.js, the MetaMask stand-in used for the recording
-├── docs/                   # TESTING, SECURITY, ARCHITECTURE, PRODUCTION, demo.gif, demo.mp4
+├── docs/                   # TESTING, SECURITY, ARCHITECTURE, PRODUCTION, DEMO_RECORDING, demo.gif, demo.mp4
 └── docker/                 # Dockerfiles
 ```
 
@@ -146,10 +113,36 @@ NFT-Trading/
 | Layer | Technology |
 |-------|------------|
 | Contracts | Solidity 0.8.30, Hardhat 3.0.7, OpenZeppelin 5.4.0, ethers.js 6.15 |
-| Backend | Node.js 22, Express 5.1, PostgreSQL 18, Socket.IO 4.8, Pinata SDK |
+| Backend | Node.js 22, Express 5.1, PostgreSQL 18, Prisma 7, Socket.IO 4.8, Pinata SDK |
 | Frontend | React 19.2, Vite 7.1, Tailwind CSS 4.1, Recharts 3.3 |
 | Language | TypeScript 5.9 |
 | Container | Docker |
+
+## Data layer
+
+The backend reaches PostgreSQL through Prisma 7 (`backend/prisma/schema.prisma`). The tables are still built by `backend/migrations/001_nft_tables.sql` (`npm run migrate`). Prisma Migrate is not used, and `npm run db:drift` fails when the schema file and the migrated database disagree. Service methods keep their signatures and snake_case row types, so the routes did not change.
+
+Of the 36 data-access methods (counted 2026-10-22), 21 use Prisma Client only, 2 mix it with raw SQL and 13 are raw, written as `$queryRaw` or `$executeRaw` tagged templates with bound parameters. Raw stays for four reasons:
+
+- Price and fees are TEXT wei strings, so totals, averages, minimums and ordering by value need `CAST(... AS numeric)`, which `aggregate()` and `orderBy` cannot do. This is platform stats, top traders, volume over time, volume per NFT, most expensive sales and price distribution (analytics), trading volume (marketplace) and the volume half of user stats.
+- Prisma has no syntax for sales by hour (`EXTRACT`), the activity feed (`UNION ALL`) or NFT search (`LIKE` on `token_id::text` plus `ILIKE` on a JSON field).
+- `createNFT`, `createListing`, the IPFS cache write and the first read of a sync marker are `INSERT ... ON CONFLICT`. Prisma 7.10.1 runs `upsert()` as a SELECT then an INSERT, and ten simultaneous calls for one key failed with P2002 in 3 of 6 runs on 2026-10-22.
+- `migrations/run.ts` stays on `pg`, because it sends a multi-statement file. The event indexer has no batched inserts, so nothing else is kept raw for speed.
+
+```powershell
+docker compose up -d --wait postgres      # PostgreSQL 18 on host port 55432
+cd backend
+npm install
+$env:DATABASE_URL = "postgresql://postgres:postgres@localhost:55432/nft_marketplace"
+npm run migrate                           # apply the SQL migration
+npm run db:generate                       # build the Prisma Client (typecheck, build and dev also do it)
+npm run db:drift                          # schema.prisma against the migrated database
+npm test                                  # 14 unit tests, no database needed
+npm run test:db                           # 63 tests on a rebuilt nft_marketplace_test database
+npm run test:db:mutation                  # breaks 9 guards one at a time, expects red each time
+```
+
+On 2026-10-22, before the port: typecheck clean, 14 unit tests passed. After: typecheck clean, the same 14 plus 63 database tests pass (63 in 5.0 seconds on a fresh clone), 9 of 9 mutations are caught, and CI runs the typecheck, unit tests, drift check and database tests against a Postgres service. Each database test file opens with positive controls. Known limits are in [docs/DATA_LAYER.md](docs/DATA_LAYER.md).
 
 ## Testing
 
@@ -163,7 +156,7 @@ npm run typecheck   # tsc --noEmit
 npm run build
 ```
 
-These need no database or chain. The indexer and the REST routes are covered by the integration scripts below, which need the Docker stack.
+These need no database or chain. The database tests are described under [Data layer](#data-layer). The indexer and the REST routes are covered by the integration scripts below, which need the Docker stack.
 
 ### Contract tests
 
@@ -217,7 +210,7 @@ The common failures (services will not start, backend not responding, contracts 
 
 What the code does:
 - Contracts use OpenZeppelin libraries, owner-only minting and fee updates, input checks (zero price, zero address, empty URI, batch size, royalty and fee caps) and a reentrancy guard on `buyNFT` and `withdrawFees`. Solidity 0.8.30 gives overflow checks.
-- The backend uses parameterized SQL queries.
+- The backend sends every value to PostgreSQL as a bound parameter, through Prisma Client or a tagged `$queryRaw` template. One query used to paste the day count into its SQL text, and now binds it.
 
 What it does not do:
 - No rate limiting on the REST API or the WebSocket server.
