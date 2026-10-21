@@ -26,12 +26,37 @@ jobs:
     defaults:
       run:
         working-directory: backend
+    env:
+      # Explicit host port, the same 55432 docker-compose.yml publishes, so a local run and CI use one connection string.
+      DATABASE_URL: postgresql://postgres:postgres@localhost:55432/nft_marketplace
+    services:
+      postgres:
+        image: postgres:18-alpine
+        env:
+          POSTGRES_DB: nft_marketplace
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
       - run: npm install
+      - run: npx prisma generate
       - run: npm run typecheck
-      - run: npm test
+      - name: Unit tests (no database needed)
+        run: npm test
+      - name: Apply the SQL migration with the repo's own script
+        run: npm run migrate
+      - name: Prisma schema matches the migrated database
+        run: npm run db:drift
+      - name: Prisma database tests
+        run: npm run test:db
       - run: npm run build
