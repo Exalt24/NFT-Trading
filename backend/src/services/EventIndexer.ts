@@ -1,6 +1,6 @@
 import { EventLog, Log, formatEther } from 'ethers';
 import { provider, nftContract, marketplaceContract } from '../config/blockchain.js';
-import { prisma } from '../config/database.js';
+import { getLastSyncedBlock, setLastSyncedBlock } from './syncStatusStore.js';
 import { NFTService } from './NFTService.js';
 import { MarketplaceService } from './MarketplaceService.js';
 import { IPFSService } from './IPFSService.js';
@@ -524,14 +524,7 @@ export class EventIndexer {
 
   private async getLastSyncedBlock(): Promise<number> {
     try {
-      const nftAddress = await nftContract.getAddress();
-      // One statement: read the row, or create it at block 0 on the first run. An empty update keeps an existing row untouched.
-      const status = await prisma.syncStatus.upsert({
-        where: { contractAddress: nftAddress.toLowerCase() },
-        create: { contractAddress: nftAddress.toLowerCase(), lastSyncedBlock: 0 },
-        update: {},
-      });
-      return status.lastSyncedBlock;
+      return await getLastSyncedBlock(await nftContract.getAddress());
     } catch (error) {
       console.error('❌ Error getting last synced block:', error);
       return 0;
@@ -540,15 +533,7 @@ export class EventIndexer {
 
   private async updateLastSyncedBlock(blockNumber: number): Promise<void> {
     try {
-      if (blockNumber === null || blockNumber === undefined || isNaN(blockNumber)) {
-        return;
-      }
-
-      const nftAddress = await nftContract.getAddress();
-      await prisma.syncStatus.updateMany({
-        where: { contractAddress: nftAddress.toLowerCase() },
-        data: { lastSyncedBlock: blockNumber },
-      });
+      await setLastSyncedBlock(await nftContract.getAddress(), blockNumber);
     } catch (error) {
       console.error('❌ Error updating last synced block:', error);
     }

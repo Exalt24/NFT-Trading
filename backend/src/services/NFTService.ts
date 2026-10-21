@@ -1,7 +1,7 @@
 import { prisma } from '../config/database.js';
 import { Prisma } from '../generated/prisma/client.js';
 import { ipfsService } from './IPFSService.js';
-import { ci } from './prismaHelpers.js';
+import { ci, nowUtc, utc } from './prismaHelpers.js';
 import { toNFTRow } from './rowMappers.js';
 import type { NFTRow, NFTMetadata } from '../types/database.js';
 
@@ -132,22 +132,26 @@ export class NFTService {
     mintedAt?: Date
   ): Promise<void> {
     try {
-      // Same fields the old INSERT ... ON CONFLICT (token_id) DO UPDATE overwrote: everything except minted_at, which keeps
+      // Raw on purpose: Prisma 7's upsert() runs as a SELECT followed by an INSERT or UPDATE, not as INSERT ... ON CONFLICT, so
+      // two calls for one token at the same moment make one of them fail with P2002 (tests/db/nft.test.ts reproduces it).
+      // One INSERT ... ON CONFLICT statement keeps the old atomicity. It overwrites everything except minted_at, which keeps
       // the time of the first mint. An empty value is stored as NULL, as before (so royaltyAmount 0 becomes NULL).
-      const fields = {
-        owner,
-        tokenUri: tokenURI,
-        ipfsCid: ipfsCID || null,
-        metadata: metadata ? (metadata as unknown as Prisma.InputJsonValue) : Prisma.DbNull,
-        royaltyReceiver: royaltyReceiver || null,
-        royaltyAmount: royaltyAmount || null,
-      };
-
-      await prisma.nft.upsert({
-        where: { tokenId },
-        create: { tokenId, mintedAt: mintedAt || new Date(), ...fields },
-        update: fields,
-      });
+      await prisma.$executeRaw`
+        INSERT INTO nfts (token_id, owner, token_uri, ipfs_cid, metadata, royalty_receiver, royalty_amount, minted_at, created_at, updated_at)
+        VALUES (
+          ${tokenId}, ${owner}, ${tokenURI}, ${ipfsCID || null},
+          ${metadata ? JSON.stringify(metadata) : null}::jsonb,
+          ${royaltyReceiver || null}, ${royaltyAmount || null},
+          ${utc(mintedAt || new Date())}, ${nowUtc}, ${nowUtc}
+        )
+        ON CONFLICT (token_id) DO UPDATE SET
+          owner = EXCLUDED.owner,
+          token_uri = EXCLUDED.token_uri,
+          ipfs_cid = EXCLUDED.ipfs_cid,
+          metadata = EXCLUDED.metadata,
+          royalty_receiver = EXCLUDED.royalty_receiver,
+          royalty_amount = EXCLUDED.royalty_amount,
+          updated_at = ${nowUtc}`;
 
       console.log(`✅ Created/Updated NFT ${tokenId} in database`);
     } catch (error) {

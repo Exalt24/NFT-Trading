@@ -23,6 +23,7 @@
     "test:unit": "tsx --test tests/unit/*.test.ts",
     "pretest:db": "tsx tests/db/prepare.ts",
     "test:db": "tsx --test --test-concurrency=1 tests/db/*.test.ts",
+    "pretest:db:mutation": "tsx tests/db/prepare.ts",
     "test:db:mutation": "tsx tests/db/mutation-check.ts",
     "pretypecheck": "prisma generate",
     "typecheck": "tsc --noEmit"

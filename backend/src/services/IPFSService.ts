@@ -1,6 +1,6 @@
 import { pinata, getIPFSUrl } from '../config/ipfs.js';
 import { prisma } from '../config/database.js';
-import type { Prisma } from '../generated/prisma/client.js';
+import { nowUtc } from './prismaHelpers.js';
 import type {
   NFTMetadata,
   IPFSUploadResult,
@@ -95,12 +95,12 @@ export class IPFSService {
 
   private async cacheMetadata(cid: string, metadata: NFTMetadata): Promise<void> {
     try {
-      const json = metadata as unknown as Prisma.InputJsonValue;
-      await prisma.ipfsMetadataCache.upsert({
-        where: { cid },
-        create: { cid, metadata: json, cachedAt: new Date() },
-        update: { metadata: json, cachedAt: new Date() },
-      });
+      // Raw on purpose: Prisma 7's upsert() is a SELECT then an INSERT or UPDATE and can fail with P2002 when two calls race
+      // for one cid; INSERT ... ON CONFLICT is a single atomic statement.
+      await prisma.$executeRaw`
+        INSERT INTO ipfs_metadata_cache (cid, metadata, cached_at)
+        VALUES (${cid}, ${JSON.stringify(metadata)}::jsonb, ${nowUtc})
+        ON CONFLICT (cid) DO UPDATE SET metadata = EXCLUDED.metadata, cached_at = ${nowUtc}`;
     } catch (error) {
       console.error('⚠️  Failed to cache metadata:', error);
     }

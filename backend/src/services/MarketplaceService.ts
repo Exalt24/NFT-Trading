@@ -1,5 +1,5 @@
 import { prisma } from '../config/database.js';
-import { ci } from './prismaHelpers.js';
+import { ci, nowUtc, utc } from './prismaHelpers.js';
 import { toListingRow, toHistoryRow } from './rowMappers.js';
 import type { MarketplaceListingRow, TradingHistoryRow } from '../types/database.js';
 
@@ -102,14 +102,18 @@ export class MarketplaceService {
     listedAt?: Date
   ): Promise<void> {
     try {
+      // Raw on purpose: Prisma 7's upsert() is a SELECT then an INSERT or UPDATE, so two simultaneous listings of one token
+      // can fail with P2002 (tests/db/marketplace.test.ts reproduces it). INSERT ... ON CONFLICT is one atomic statement.
       // Listing the same token again re-activates the one row (UNIQUE nft_contract, token_id) instead of adding a second.
-      const fields = { seller, price, active: true, listedAt: listedAt || new Date() };
-
-      await prisma.marketplaceListing.upsert({
-        where: { nftContract_tokenId: { nftContract, tokenId } },
-        create: { nftContract, tokenId, ...fields },
-        update: fields,
-      });
+      await prisma.$executeRaw`
+        INSERT INTO marketplace_listings (nft_contract, token_id, seller, price, active, listed_at, created_at, updated_at)
+        VALUES (${nftContract}, ${tokenId}, ${seller}, ${price}, true, ${utc(listedAt || new Date())}, ${nowUtc}, ${nowUtc})
+        ON CONFLICT (nft_contract, token_id) DO UPDATE SET
+          seller = EXCLUDED.seller,
+          price = EXCLUDED.price,
+          active = true,
+          listed_at = EXCLUDED.listed_at,
+          updated_at = ${nowUtc}`;
 
       console.log(`✅ Created listing for NFT ${tokenId} at ${price} ETH`);
     } catch (error) {
