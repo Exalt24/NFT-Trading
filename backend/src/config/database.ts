@@ -1,30 +1,22 @@
-import { Pool, PoolConfig } from 'pg';
+import { PrismaPg } from '@prisma/adapter-pg';
+import { PrismaClient } from '../generated/prisma/client.js';
 import { env } from './env.js';
 
-const poolConfig: PoolConfig = {
-  host: env.DB_HOST,
-  port: env.DB_PORT,
-  database: env.DB_NAME,
-  user: env.DB_USER,
-  password: env.DB_PASSWORD,
+// Prisma talks to PostgreSQL through the pg driver, so the pool limits the old code set by hand still apply.
+const adapter = new PrismaPg({
+  connectionString: env.DATABASE_URL,
   max: 20,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 2000,
-};
-
-export const pool = new Pool(poolConfig);
-
-pool.on('error', (err) => {
-  console.error('❌ Unexpected database error:', err);
-  process.exit(-1);
 });
+
+export const prisma = new PrismaClient({ adapter });
 
 export async function testDatabaseConnection(): Promise<boolean> {
   try {
-    const client = await pool.connect();
-    const result = await client.query('SELECT NOW()');
-    client.release();
-    console.log('✅ Database connected successfully at', result.rows[0].now);
+    // A real round trip, so a wrong URL or a stopped database is reported here and not on the first request.
+    const rows = await prisma.$queryRaw<Array<{ now: Date }>>`SELECT NOW() AS now`;
+    console.log('✅ Database connected successfully at', rows[0].now);
     return true;
   } catch (error) {
     console.error('❌ Database connection failed:', error);
@@ -33,6 +25,6 @@ export async function testDatabaseConnection(): Promise<boolean> {
 }
 
 export async function closeDatabaseConnection(): Promise<void> {
-  await pool.end();
+  await prisma.$disconnect();
   console.log('🔌 Database connection pool closed');
 }

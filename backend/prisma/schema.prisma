@@ -1,0 +1,100 @@
+// The tables are created by backend/migrations/001_nft_tables.sql (run with `npm run migrate`), not by Prisma Migrate.
+// This file was produced with `prisma db pull` against a database built from that SQL, then cleaned:
+// readable model and field names mapped back to the real table and column names, one logical relation, every index kept.
+// `npm run db:drift` fails when this file and the migrated database disagree.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+  // The tables have no foreign keys, so relations are resolved by Prisma and never by the database.
+  relationMode = "prisma"
+}
+
+/// Every minted NFT with its metadata and royalty info. One row per token id (the app indexes a single NFT contract).
+model Nft {
+  tokenId         Int       @id @map("token_id")
+  owner           String    @db.VarChar(42)
+  tokenUri        String    @map("token_uri")
+  ipfsCid         String?   @map("ipfs_cid") @db.VarChar(100)
+  metadata        Json?
+  royaltyReceiver String?   @map("royalty_receiver") @db.VarChar(42)
+  royaltyAmount   Int?      @map("royalty_amount")
+  mintedAt        DateTime? @map("minted_at") @db.Timestamp(6)
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  /// Logical relation only: trading_history.token_id has no foreign key in the database.
+  sales TradingHistory[]
+
+  @@index([mintedAt(sort: Desc)], map: "idx_nft_minted_at")
+  @@index([owner], map: "idx_nft_owner")
+  @@map("nfts")
+}
+
+/// Active and historical listings. Prices are TEXT so a wei value never loses precision.
+model MarketplaceListing {
+  id          Int       @id @default(autoincrement())
+  nftContract String    @map("nft_contract") @db.VarChar(42)
+  tokenId     Int       @map("token_id")
+  seller      String    @db.VarChar(42)
+  price       String
+  active      Boolean?  @default(true)
+  listedAt    DateTime? @map("listed_at") @db.Timestamp(6)
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@unique([nftContract, tokenId])
+  @@index([active], map: "idx_listing_active")
+  @@index([listedAt(sort: Desc)], map: "idx_listing_listed_at")
+  @@index([nftContract, tokenId], map: "idx_listing_nft")
+  @@index([seller], map: "idx_listing_seller")
+  @@map("marketplace_listings")
+}
+
+/// Every completed sale. Price and both fees are TEXT wei strings.
+model TradingHistory {
+  id              Int       @id @default(autoincrement())
+  nftContract     String    @map("nft_contract") @db.VarChar(42)
+  tokenId         Int       @map("token_id")
+  seller          String    @db.VarChar(42)
+  buyer           String    @db.VarChar(42)
+  price           String
+  platformFee     String    @map("platform_fee")
+  royaltyFee      String    @map("royalty_fee")
+  transactionHash String?   @map("transaction_hash") @db.VarChar(66)
+  soldAt          DateTime? @map("sold_at") @db.Timestamp(6)
+  createdAt       DateTime? @default(now()) @map("created_at") @db.Timestamp(6)
+
+  nft Nft @relation(fields: [tokenId], references: [tokenId])
+
+  @@index([buyer], map: "idx_history_buyer")
+  @@index([seller], map: "idx_history_seller")
+  @@index([soldAt(sort: Desc)], map: "idx_history_sold_at")
+  @@index([nftContract, tokenId], map: "idx_history_token")
+  @@map("trading_history")
+}
+
+/// Cached IPFS metadata, keyed by content id.
+model IpfsMetadataCache {
+  cid      String    @id @db.VarChar(100)
+  metadata Json
+  cachedAt DateTime? @default(now()) @map("cached_at") @db.Timestamp(6)
+
+  @@map("ipfs_metadata_cache")
+}
+
+/// How far the indexer has read, one row per contract.
+model SyncStatus {
+  id              Int       @id @default(autoincrement())
+  contractAddress String    @unique @map("contract_address") @db.VarChar(42)
+  lastSyncedBlock Int       @map("last_synced_block")
+  updatedAt       DateTime? @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@map("sync_status")
+}

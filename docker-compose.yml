@@ -7,7 +7,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5433:5432"  # Changed from 5432 to avoid conflict
+      - "55432:5432"  # explicit non-default host port, since 5432 and 5433 are both commonly taken by other projects
     volumes:
       - nft_postgres_data:/var/lib/postgresql  # postgres 18+ keeps its data in a versioned subdirectory of this mount
     healthcheck:

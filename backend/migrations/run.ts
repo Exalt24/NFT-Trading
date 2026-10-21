@@ -3,6 +3,7 @@ import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import pg from 'pg';
 import dotenv from 'dotenv';
+import { resolveDatabaseUrl } from '../src/config/databaseUrl.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -11,13 +12,8 @@ dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const { Pool } = pg;
 
-const pool = new Pool({
-  host: process.env.DB_HOST || 'localhost',
-  port: parseInt(process.env.DB_PORT || '5432'),
-  database: process.env.DB_NAME || 'nft_marketplace',
-  user: process.env.DB_USER || 'postgres',
-  password: process.env.DB_PASSWORD || 'postgres',
-});
+// DATABASE_URL wins; the older DB_* variables still work (see src/config/databaseUrl.ts).
+const pool = new Pool({ connectionString: resolveDatabaseUrl() });
 
 async function runMigrations() {
   const client = await pool.connect();
