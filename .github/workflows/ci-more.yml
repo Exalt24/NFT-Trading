@@ -13,6 +13,23 @@ concurrency:
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
+  node-creator-dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: "creator-dashboard"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Install
+        run: npm install
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
   node-marketplace-frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -26,8 +43,10 @@ jobs:
           node-version: 22
       - name: Install
         run: npm install
-      # DROPPED, failed locally when this file was made: npm run typecheck
-      # DROPPED, failed locally when this file was made: npm run build
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build
+        run: npm run build
   node-scripts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
