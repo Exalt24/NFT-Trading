@@ -26,7 +26,7 @@
     "@openzeppelin/contracts": "^5.4.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
+    "typescript": "^7.0.2",
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
     "@nomicfoundation/hardhat-network-helpers": "^3.0.1",
     "@types/node": "^22.10.2",
