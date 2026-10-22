@@ -48,7 +48,7 @@
     "cors": "^2.8.5"
   },
   "devDependencies": {
-    "typescript": "^5.9.0",
+    "typescript": "^7.0.2",
     "prisma": "^7.10.1",
     "@types/node": "^22.10.2",
     "@types/express": "^5.0.0",
