@@ -1,7 +1,7 @@
 import { useEffect } from 'react'; // ADD THIS
 import { useCreatorStats } from '../../hooks/useCreatorStats';
 import { useCreatorNFTs } from '../../hooks/useCreatorNFTs';
-import { formatEther, formatTimestamp } from '../../utils/formatters';
+import { formatTimestamp } from '../../utils/formatters';
 import type { WebSocketEvent } from '../../types'; // ADD THIS
 
 interface CreatorStatsProps {

@@ -117,7 +117,7 @@ export function TradingVolumeChart({ lastEvent }: TradingVolumeChartProps) {
               color: '#e2e8f0'
             }}
             labelStyle={{ color: '#e2e8f0' }}
-            formatter={(value: number) => [`${formatPriceFromDB(value.toString())} ETH`, 'Volume']}
+            formatter={(value) => [`${formatPriceFromDB(String(value))} ETH`, 'Volume']}
           />
           <Legend 
             wrapperStyle={{ color: '#94a3b8' }}

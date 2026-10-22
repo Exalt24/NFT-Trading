@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import type { NFT, Listing, SortOption } from '../types';
+import { toTime } from '../utils/filterUtils';
 
 type StatusFilter = 'all' | 'listed' | 'unlisted';
 
@@ -134,8 +135,8 @@ function sortNFTs(
 
     case 'recent':
       return sorted.sort((a, b) => {
-        const timeA = listingMap.get(a.tokenId)?.listedAt || 0;
-        const timeB = listingMap.get(b.tokenId)?.listedAt || 0;
+        const timeA = toTime(listingMap.get(a.tokenId)?.listedAt);
+        const timeB = toTime(listingMap.get(b.tokenId)?.listedAt);
         return timeB - timeA;
       });
 

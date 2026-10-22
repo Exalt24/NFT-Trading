@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../utils/constants';
-import { MintedNFT, CreatorStats, MintingActivity, RoyaltyEarning, SaleByNFT, TradingHistory } from '../types';
+import { MintedNFT, MintingActivity, RoyaltyEarning, SaleByNFT, TradingHistory } from '../types';
 
 /**
  * Convert snake_case keys to camelCase, but preserve ERC-721 attribute format.

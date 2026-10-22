@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { NFTImage } from './NFTImage';
 import { useNFT } from '../hooks/useNFT';
 import { useListing, usePriceHistory, useMarketplaceActions } from '../hooks/useMarketplace';
-import { formatAddress, formatTimestamp, formatPriceFromDB, formatEther, copyToClipboard } from '../utils/formatters';
+import { formatAddress, formatTimestamp, formatPriceFromDB, copyToClipboard } from '../utils/formatters';
 import { getNFTContract, getProvider } from '../services/contracts';
 import ListNFTModal from './modals/ListNFTModal';
 import UpdatePriceModal from './modals/UpdatePriceModal';

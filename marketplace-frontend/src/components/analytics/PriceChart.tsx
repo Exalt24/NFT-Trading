@@ -53,7 +53,7 @@ export function PriceChart({ tokenId }: PriceChartProps) {
   const chartData = history.map((sale, index) => ({
     sale: `Sale ${index + 1}`,
     price: parseFloat(sale.price),
-    date: new Date(sale.soldAt).toLocaleDateString(),
+    date: new Date(sale.soldAt ?? 0).toLocaleDateString(),
     seller: sale.seller,
     buyer: sale.buyer
   }));
@@ -96,8 +96,8 @@ export function PriceChart({ tokenId }: PriceChartProps) {
               color: '#e2e8f0'
             }}
             labelStyle={{ color: '#e2e8f0' }}
-            formatter={(value: number) => {
-              return [`${formatPriceFromDB(value.toString())} ETH`, 'Price'];
+            formatter={(value) => {
+              return [`${formatPriceFromDB(String(value))} ETH`, 'Price'];
             }}
           />
           <ReferenceLine 

@@ -111,7 +111,7 @@ export function MintingActivityChart({ data, events = [] }: MintingActivityChart
                 color: '#fff'
               }}
               labelFormatter={(label) => formatChartDate(label as string)}
-              formatter={(value: number) => [`${value} NFT${value !== 1 ? 's' : ''}`, 'Minted']}
+              formatter={(value) => [`${value} NFT${Number(value) !== 1 ? 's' : ''}`, 'Minted']}
             />
             <Line
               type="monotone"

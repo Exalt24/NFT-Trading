@@ -114,8 +114,8 @@ export function RoyaltyEarningsChart({ data, events = [] }: RoyaltyEarningsChart
                 color: '#fff'
               }}
               labelFormatter={(label) => formatChartDate(label as string)}
-              formatter={(value: number) => [
-                `${formatETHValue(value)} ETH`,
+              formatter={(value) => [
+                `${formatETHValue(Number(value))} ETH`,
                 'Royalties'
               ]}
             />

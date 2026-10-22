@@ -2,7 +2,7 @@ import { useState, useCallback } from 'react';
 import { parseEther } from 'ethers';
 import { MintProgress, TransactionStatus, RoyaltyInfo } from '../types';
 import { ContractError } from '../utils/errors';
-import { handleContractError, parseError } from '../utils/errors';
+import { handleContractError } from '../utils/errors';
 import { getNFTContract } from '../services/contracts';
 import { ROYALTY } from '../utils/constants';
 

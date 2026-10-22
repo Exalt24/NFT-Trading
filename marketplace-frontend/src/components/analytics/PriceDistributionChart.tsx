@@ -101,7 +101,7 @@ export function PriceDistributionChart({ lastEvent }: PriceDistributionChartProp
               color: '#e2e8f0'
             }}
             labelStyle={{ color: '#e2e8f0' }}
-            formatter={(value: number) => [value, 'NFTs']}
+            formatter={(value) => [value, 'NFTs']}
           />
           <Bar dataKey="count" radius={[8, 8, 0, 0]}>
             {distribution.map((_, index) => (

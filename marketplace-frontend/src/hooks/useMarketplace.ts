@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { parseEther } from 'ethers';
 import { api } from '../services/api';
-import { getMarketplaceContract, getNFTContract, checkApproval, approveNFT } from '../services/contracts';
+import { getMarketplaceContract, checkApproval, approveNFT } from '../services/contracts';
 import { NFT_CONTRACT_ADDRESS } from '../utils/constants';
 import type { Listing, TradingHistory, TransactionState } from '../types';
 import type { JsonRpcSigner } from 'ethers';

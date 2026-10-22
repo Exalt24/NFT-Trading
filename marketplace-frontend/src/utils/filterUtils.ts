@@ -1,5 +1,10 @@
 import type { Listing, FilterState, SortOption, NFT } from '../types';
 
+/** `listedAt` arrives from the API as an ISO date string; sort on its time value, unlisted counts as 0. */
+export function toTime(value: string | null | undefined): number {
+  return value ? new Date(value).getTime() : 0;
+}
+
 export function applyFilters(
   listings: Listing[], 
   filters: FilterState, 
@@ -46,8 +51,8 @@ export function sortListings(listings: Listing[], sortBy: SortOption): Listing[]
     case 'recent':
     default:
       return sorted.sort((a, b) => {
-        const timeA = a.listedAt || 0;
-        const timeB = b.listedAt || 0;
+        const timeA = toTime(a.listedAt);
+        const timeB = toTime(b.listedAt);
         return timeB - timeA;
       });
   }

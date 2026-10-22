@@ -92,9 +92,9 @@ export function SalesByNFTChart({ data, events = [] }: SalesByNFTChartProps) {
                   borderRadius: '8px',
                   color: '#fff'
                 }}
-                formatter={(value: number, name: string) => {
+                formatter={(value, name) => {
                   if (name === 'totalVolume') {
-                    return [`${formatETHValue(value)} ETH`, 'Total Volume'];
+                    return [`${formatETHValue(Number(value))} ETH`, 'Total Volume'];
                   }
                   return [value, 'Sales Count'];
                 }}

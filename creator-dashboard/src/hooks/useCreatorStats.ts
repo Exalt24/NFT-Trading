@@ -9,7 +9,6 @@ interface UseCreatorStatsOptions {
 }
 
 export function useCreatorStats({
-  nfts,
   listings,
   creatorAddress,
 }: UseCreatorStatsOptions): {
