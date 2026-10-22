@@ -21,7 +21,7 @@ export class IPFSService {
     const contentType = options.contentType || 'image/png';
 
     try {
-      const file = new File([imageBuffer], filename, { type: contentType });
+      const file = new File([new Uint8Array(imageBuffer)], filename, { type: contentType });
       const upload = await pinata.upload.file(file);
      
       const cid = (upload as any).IpfsHash || (upload as any).cid;
